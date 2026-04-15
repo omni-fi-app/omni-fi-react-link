@@ -1,0 +1,4 @@
+# Global ownership: Any PR touching any file requires review from one of these owners.
+# This prevents bottlenecks while maintaining strict quality control.
+
+* @GarrickBrown @vladyslav-nechyporuk
