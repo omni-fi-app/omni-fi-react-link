@@ -70,6 +70,25 @@ web_modules/
 .env.*
 !.env.example
 
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Claude AI files
+CLAUDE.md
+**/CLAUDE.md
+.claude
+.claude/settings.local.json
+.claude/memory/
+
+# MCP configuration (contains secrets — never publish)
+.mcp.json
+
 # parcel-bundler cache (https://parceljs.org/)
 .cache
 .parcel-cache
