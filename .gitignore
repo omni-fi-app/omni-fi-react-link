@@ -70,6 +70,15 @@ web_modules/
 .env.*
 !.env.example
 
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
 # parcel-bundler cache (https://parceljs.org/)
 .cache
 .parcel-cache
