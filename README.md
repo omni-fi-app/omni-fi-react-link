@@ -40,7 +40,7 @@ Requires **React 18 or 19** as a peer dependency.
 import { useOmniFILink } from "@omni-fi/react-link";
 
 function ConnectButton({ linkToken }: { linkToken: string }) {
-  const { open, ready } = useOmniFILink({
+  const { open, isReady } = useOmniFILink({
     token: linkToken,
     onSuccess(publicToken) {
       // Exchange publicToken on your server for a permanent connection_id.
@@ -55,7 +55,7 @@ function ConnectButton({ linkToken }: { linkToken: string }) {
   });
 
   return (
-    <button onClick={open} disabled={!ready}>
+    <button onClick={open} disabled={!isReady}>
       Connect your bank
     </button>
   );
@@ -71,8 +71,9 @@ function ConnectButton({ linkToken }: { linkToken: string }) {
 | Property  | Type         | Description                                      |
 | --------- | ------------ | ------------------------------------------------ |
 | `open`    | `() => void` | Opens the Link widget modal/popup.               |
-| `ready`   | `boolean`    | `true` once the CDN script has loaded.           |
-| `destroy` | `() => void` | Manually unmount the widget and event listeners. |
+| `destroy` | `() => void` | Closes the widget and cleans up its handlers. Called automatically on unmount. |
+| `isReady` | `boolean`    | `true` once the CDN script has loaded.           |
+| `error`   | `Error \| null` | Set if the CDN script fails to load.          |
 
 ### `OmniFIConfig`
 
@@ -82,6 +83,7 @@ function ConnectButton({ linkToken }: { linkToken: string }) {
 | `onSuccess`   | `(publicToken: string) => void`        | Yes      | Called on successful connection.           |
 | `displayMode` | `'iframe' \| 'popup'`                  | No       | Defaults to `iframe`.                      |
 | `environment` | `'production' \| 'staging' \| 'local'` | No       | Defaults to `production`.                  |
+| `scriptUrl`   | `string`                               | No       | Override the CDN script URL. For enterprise clients that need to pin to a specific hosted version. |
 
 ---
 
