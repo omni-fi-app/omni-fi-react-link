@@ -1,0 +1,31 @@
+name: CI Pipeline
+
+on:
+  pull_request:
+    branches: ["main", "staging"]
+  push:
+    branches: ["main", "staging"]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v5
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: "package.json"
+
+      - name: Install Dependencies
+        run: bun install --frozen-lockfile
+
+      # - name: Lint Code
+      #   run: bun run lint  # Uncomment once linting rules are finalized in the UI phase
+
+      - name: Run Build
+        run: bun run build
+
+      - name: Run Tests
+        run: bun run test
