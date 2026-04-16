@@ -19,14 +19,18 @@
   "scripts": {
     "build": "tsup src/index.ts --format cjs,esm --dts --clean",
     "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "test": "bun test"
   },
   "devDependencies": {
+    "@happy-dom/global-registrator": "^20.9.0",
+    "@testing-library/react": "^16.3.2",
     "@types/bun": "latest",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "eslint": "^9.0.0",
     "eslint-plugin-react-hooks": "^5.0.0",
+    "happy-dom": "^20.9.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "tsup": "^8.5.1",
