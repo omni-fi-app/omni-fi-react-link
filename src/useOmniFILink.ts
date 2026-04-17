@@ -1,5 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { type OmniFIConfig } from "./types";
+import {
+  type OmniFIConfig,
+  type OmniFIInstance,
+  type OmniFITheme,
+  type OmniFILanguage,
+} from "./types";
 
 // Default CDN URL for the Omni-FI Connect script.
 // Consumers can override this via OmniFIConfig.scriptUrl for version-pinning.
@@ -10,6 +15,8 @@ interface UseOmniFILinkResult {
   destroy: () => void;
   isReady: boolean;
   error: Error | null;
+  setTheme: (theme: OmniFITheme) => void;
+  setLanguage: (lang: OmniFILanguage) => void;
 }
 
 export function useOmniFILink(config: OmniFIConfig): UseOmniFILinkResult {
@@ -18,8 +25,8 @@ export function useOmniFILink(config: OmniFIConfig): UseOmniFILinkResult {
 
   // Keep a mutable ref of the config so we don't trigger re-renders if the developer changes callbacks
   const configRef = useRef(config);
-  // Holds the destroy function returned by window.OmniFI.connect()
-  const destroyFnRef = useRef<(() => void) | null>(null);
+  // Store the active widget instance so we can call methods on it or destroy it
+  const instanceRef = useRef<OmniFIInstance | null>(null);
 
   useEffect(() => {
     configRef.current = config;
@@ -28,11 +35,23 @@ export function useOmniFILink(config: OmniFIConfig): UseOmniFILinkResult {
   useEffect(() => {
     const scriptUrl = configRef.current.scriptUrl ?? SCRIPT_URL;
 
-    // If the script is already on the page, just mark as ready
+    // If the script is already on the page, just mark as ready and register cleanup
     if (window.OmniFI) {
       setIsReady(true);
-      return;
+      return () => {
+        instanceRef.current?.destroy();
+      };
     }
+
+    const handleLoad = () => setIsReady(true);
+    const handleError = (event: Event) =>
+      setError(
+        new Error(
+          `Failed to load Omni-FI SDK script from ${scriptUrl}${
+            event.type ? ` (event: ${event.type})` : ""
+          }`,
+        ),
+      );
 
     // Check if we are already injecting it to prevent duplicates
     let script = document.querySelector<HTMLScriptElement>(
@@ -43,34 +62,27 @@ export function useOmniFILink(config: OmniFIConfig): UseOmniFILinkResult {
       script = document.createElement("script");
       script.src = scriptUrl;
       script.async = true;
+      // Attach listeners before appending — defensive against any cached-load edge cases
+      script.addEventListener("load", handleLoad);
+      script.addEventListener("error", handleError);
       document.head.appendChild(script);
+    } else {
+      script.addEventListener("load", handleLoad);
+      script.addEventListener("error", handleError);
     }
-
-    const handleLoad = () => setIsReady(true);
-    const handleError = () =>
-      setError(
-        new Error(`Failed to load Omni-FI SDK script from ${scriptUrl}`),
-      );
-
-    script.addEventListener("load", handleLoad);
-    script.addEventListener("error", handleError);
 
     return () => {
       script.removeEventListener("load", handleLoad);
       script.removeEventListener("error", handleError);
-    };
-  }, []);
 
-  // Destroy the widget instance when the component unmounts
-  useEffect(() => {
-    return () => {
-      destroyFnRef.current?.();
+      // Clean up the widget if the React component unmounts
+      instanceRef.current?.destroy();
     };
   }, []);
 
   const destroy = useCallback(() => {
-    destroyFnRef.current?.();
-    destroyFnRef.current = null;
+    instanceRef.current?.destroy();
+    instanceRef.current = null;
   }, []);
 
   const open = useCallback(() => {
@@ -80,10 +92,19 @@ export function useOmniFILink(config: OmniFIConfig): UseOmniFILinkResult {
     }
 
     // Destroy any existing widget instance before opening a new one
-    destroyFnRef.current?.();
+    instanceRef.current?.destroy();
 
-    destroyFnRef.current = window.OmniFI.connect(configRef.current).destroy;
+    // Capture the instance so we can interact with it later
+    instanceRef.current = window.OmniFI.connect(configRef.current);
   }, []);
 
-  return { open, destroy, isReady, error };
+  const setTheme = useCallback((theme: OmniFITheme) => {
+    instanceRef.current?.setTheme(theme);
+  }, []);
+
+  const setLanguage = useCallback((lang: OmniFILanguage) => {
+    instanceRef.current?.setLanguage(lang);
+  }, []);
+
+  return { open, destroy, isReady, error, setTheme, setLanguage };
 }
