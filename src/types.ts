@@ -10,6 +10,10 @@ export const OMNIFI_EVENTS = {
 export type OmniFIEventType =
   (typeof OMNIFI_EVENTS)[keyof typeof OMNIFI_EVENTS];
 
+export type OmniFITheme = "light" | "dark" | "system";
+
+export type OmniFILanguage = "en-GB" | "fr";
+
 export interface OmniFIError {
   code: string;
   message: string;
@@ -20,8 +24,8 @@ export interface OmniFIConfig {
   containerId?: string;
   displayMode?: "iframe" | "popup";
   environment?: "local" | "staging" | "production";
-  theme?: "light" | "dark" | "system";
-  language?: "en" | "fr";
+  theme?: OmniFITheme;
+  language?: OmniFILanguage;
   /**
    * Override the CDN URL for the Omni-FI Connect script.
    * Useful for enterprise clients that need to pin to a specific hosted version.
@@ -39,8 +43,8 @@ export interface OmniFIConfig {
 
 export interface OmniFIInstance {
   destroy: () => void;
-  setTheme: (theme: "light" | "dark" | "system") => void;
-  setLanguage: (lang: "en" | "fr") => void;
+  setTheme: (theme: OmniFITheme) => void;
+  setLanguage: (lang: OmniFILanguage) => void;
 }
 
 // Extend the global Window object so TypeScript knows about our injected script

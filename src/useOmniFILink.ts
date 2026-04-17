@@ -1,5 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { type OmniFIConfig, type OmniFIInstance } from "./types";
+import {
+  type OmniFIConfig,
+  type OmniFIInstance,
+  type OmniFITheme,
+  type OmniFILanguage,
+} from "./types";
 
 // Default CDN URL for the Omni-FI Connect script.
 // Consumers can override this via OmniFIConfig.scriptUrl for version-pinning.
@@ -10,8 +15,8 @@ interface UseOmniFILinkResult {
   destroy: () => void;
   isReady: boolean;
   error: Error | null;
-  setTheme: (theme: "light" | "dark" | "system") => void;
-  setLanguage: (lang: "en" | "fr") => void;
+  setTheme: (theme: OmniFITheme) => void;
+  setLanguage: (lang: OmniFILanguage) => void;
 }
 
 export function useOmniFILink(config: OmniFIConfig): UseOmniFILinkResult {
@@ -30,22 +35,12 @@ export function useOmniFILink(config: OmniFIConfig): UseOmniFILinkResult {
   useEffect(() => {
     const scriptUrl = configRef.current.scriptUrl ?? SCRIPT_URL;
 
-    // If the script is already on the page, just mark as ready
+    // If the script is already on the page, just mark as ready and register cleanup
     if (window.OmniFI) {
       setIsReady(true);
-      return;
-    }
-
-    // Check if we are already injecting it to prevent duplicates
-    let script = document.querySelector<HTMLScriptElement>(
-      `script[src="${scriptUrl}"]`,
-    );
-
-    if (!script) {
-      script = document.createElement("script");
-      script.src = scriptUrl;
-      script.async = true;
-      document.head.appendChild(script);
+      return () => {
+        instanceRef.current?.destroy();
+      };
     }
 
     const handleLoad = () => setIsReady(true);
@@ -58,8 +53,23 @@ export function useOmniFILink(config: OmniFIConfig): UseOmniFILinkResult {
         ),
       );
 
-    script.addEventListener("load", handleLoad);
-    script.addEventListener("error", handleError);
+    // Check if we are already injecting it to prevent duplicates
+    let script = document.querySelector<HTMLScriptElement>(
+      `script[src="${scriptUrl}"]`,
+    );
+
+    if (!script) {
+      script = document.createElement("script");
+      script.src = scriptUrl;
+      script.async = true;
+      // Attach listeners before appending — defensive against any cached-load edge cases
+      script.addEventListener("load", handleLoad);
+      script.addEventListener("error", handleError);
+      document.head.appendChild(script);
+    } else {
+      script.addEventListener("load", handleLoad);
+      script.addEventListener("error", handleError);
+    }
 
     return () => {
       script.removeEventListener("load", handleLoad);
@@ -88,11 +98,11 @@ export function useOmniFILink(config: OmniFIConfig): UseOmniFILinkResult {
     instanceRef.current = window.OmniFI.connect(configRef.current);
   }, []);
 
-  const setTheme = useCallback((theme: "light" | "dark" | "system") => {
+  const setTheme = useCallback((theme: OmniFITheme) => {
     instanceRef.current?.setTheme(theme);
   }, []);
 
-  const setLanguage = useCallback((lang: "en" | "fr") => {
+  const setLanguage = useCallback((lang: OmniFILanguage) => {
     instanceRef.current?.setLanguage(lang);
   }, []);
 
