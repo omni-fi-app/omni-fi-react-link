@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { type OmniFIConfig } from "./types";
+import { type OmniFIConfig, type OmniFIInstance } from "./types";
 
 // Default CDN URL for the Omni-FI Connect script.
 // Consumers can override this via OmniFIConfig.scriptUrl for version-pinning.
@@ -10,6 +10,8 @@ interface UseOmniFILinkResult {
   destroy: () => void;
   isReady: boolean;
   error: Error | null;
+  setTheme: (theme: "light" | "dark" | "system") => void;
+  setLanguage: (lang: "en" | "fr") => void;
 }
 
 export function useOmniFILink(config: OmniFIConfig): UseOmniFILinkResult {
@@ -18,8 +20,8 @@ export function useOmniFILink(config: OmniFIConfig): UseOmniFILinkResult {
 
   // Keep a mutable ref of the config so we don't trigger re-renders if the developer changes callbacks
   const configRef = useRef(config);
-  // Holds the destroy function returned by window.OmniFI.connect()
-  const destroyFnRef = useRef<(() => void) | null>(null);
+  // Store the active widget instance so we can call methods on it or destroy it
+  const instanceRef = useRef<OmniFIInstance | null>(null);
 
   useEffect(() => {
     configRef.current = config;
@@ -47,9 +49,13 @@ export function useOmniFILink(config: OmniFIConfig): UseOmniFILinkResult {
     }
 
     const handleLoad = () => setIsReady(true);
-    const handleError = () =>
+    const handleError = (event: Event) =>
       setError(
-        new Error(`Failed to load Omni-FI SDK script from ${scriptUrl}`),
+        new Error(
+          `Failed to load Omni-FI SDK script from ${scriptUrl}${
+            event.type ? ` (event: ${event.type})` : ""
+          }`,
+        ),
       );
 
     script.addEventListener("load", handleLoad);
@@ -58,19 +64,15 @@ export function useOmniFILink(config: OmniFIConfig): UseOmniFILinkResult {
     return () => {
       script.removeEventListener("load", handleLoad);
       script.removeEventListener("error", handleError);
-    };
-  }, []);
 
-  // Destroy the widget instance when the component unmounts
-  useEffect(() => {
-    return () => {
-      destroyFnRef.current?.();
+      // Clean up the widget if the React component unmounts
+      instanceRef.current?.destroy();
     };
   }, []);
 
   const destroy = useCallback(() => {
-    destroyFnRef.current?.();
-    destroyFnRef.current = null;
+    instanceRef.current?.destroy();
+    instanceRef.current = null;
   }, []);
 
   const open = useCallback(() => {
@@ -80,10 +82,19 @@ export function useOmniFILink(config: OmniFIConfig): UseOmniFILinkResult {
     }
 
     // Destroy any existing widget instance before opening a new one
-    destroyFnRef.current?.();
+    instanceRef.current?.destroy();
 
-    destroyFnRef.current = window.OmniFI.connect(configRef.current).destroy;
+    // Capture the instance so we can interact with it later
+    instanceRef.current = window.OmniFI.connect(configRef.current);
   }, []);
 
-  return { open, destroy, isReady, error };
+  const setTheme = useCallback((theme: "light" | "dark" | "system") => {
+    instanceRef.current?.setTheme(theme);
+  }, []);
+
+  const setLanguage = useCallback((lang: "en" | "fr") => {
+    instanceRef.current?.setLanguage(lang);
+  }, []);
+
+  return { open, destroy, isReady, error, setTheme, setLanguage };
 }
