@@ -43,9 +43,9 @@ function ConnectButton({ linkToken }: { linkToken: string }) {
   const { open, isReady } = useOmniFILink({
     token: linkToken,
     onSuccess({ connections }) {
-      for (const { publicToken, institutionId, accountType } of connections) {
+      for (const { publicToken, institutionId, customerType } of connections) {
         // Exchange each publicToken on your server for a permanent connection_id.
-        console.log("Connected:", institutionId, accountType, publicToken);
+        console.log("Connected:", institutionId, customerType, publicToken);
       }
     },
     onError(error) {
@@ -82,7 +82,7 @@ function ConnectButton({ linkToken }: { linkToken: string }) {
 | Property      | Type                                   | Required | Description                                |
 | ------------- | -------------------------------------- | -------- | ------------------------------------------ |
 | `token`       | `string`                                      | Yes      | Short-lived `link_token` from your server. |
-| `onSuccess`   | `(payload: OmniFISuccessPayload) => void`     | Yes      | Called once all connections are complete. `payload.connections` is an array of `{ publicToken, institutionId, accountType }`. |
+| `onSuccess`   | `(payload: OmniFISuccessPayload) => void`     | Yes      | Called once all connections are complete. `payload.connections` is an array of `{ publicToken, institutionId, customerType }`. |
 | `onError`     | `(error: OmniFIError) => void`                | No       | Called when the widget reports an error. |
 | `onExit`      | `() => void`                                  | No       | Called when the user closes the widget without completing. |
 | `onEvent`     | `(eventName: string, metadata?) => void`      | No       | Called for intermediate events (e.g., `omni-fi:connection-linked` per bank linked). |
