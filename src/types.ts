@@ -3,6 +3,7 @@ export const OMNIFI_EVENTS = {
   ERROR: "omni-fi:error",
   EXIT: "omni-fi:exit",
   READY: "omni-fi:ready",
+  CONNECTION_LINKED: "omni-fi:connection-linked",
   SET_THEME: "omni-fi:set-theme",
   SET_LANGUAGE: "omni-fi:set-language",
 } as const;
@@ -19,6 +20,15 @@ export interface OmniFIError {
   message: string;
 }
 
+export interface OmniFIConnection {
+  publicToken: string;
+  institutionId: string;
+}
+
+export interface OmniFISuccessPayload {
+  connections: OmniFIConnection[];
+}
+
 export interface OmniFIConfig {
   token: string;
   containerId?: string;
@@ -32,7 +42,7 @@ export interface OmniFIConfig {
    * If omitted, the SDK loads the latest version from the default CDN.
    */
   scriptUrl?: string;
-  onSuccess: (publicToken: string) => void;
+  onSuccess: (payload: OmniFISuccessPayload) => void;
   onError?: (error: OmniFIError) => void;
   onExit?: () => void;
   onEvent?: (
