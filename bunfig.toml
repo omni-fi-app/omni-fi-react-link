@@ -1,4 +1,4 @@
 [test]
 # Exclude macOS resource fork metadata files (._*) created on non-HFS+ volumes.
 # These binary files match *.test.ts but contain binary content, not tests.
-exclude = ["**/._*", "src/._*", "src/**/_*"]
+exclude = ["**/._*"]

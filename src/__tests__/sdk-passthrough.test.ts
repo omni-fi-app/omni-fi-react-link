@@ -102,21 +102,23 @@ describe("SDK passthrough — session-token exchange regression", () => {
 
       window.OmniFI = { connect: connectMock };
 
-      const { result } = renderHook(() =>
+      const { result, unmount } = renderHook(() =>
         useOmniFILink({ token, onSuccess: mock(() => {}) }),
       );
 
-      act(() => {
-        result.current.open();
-      });
+      try {
+        act(() => {
+          result.current.open();
+        });
 
-      expect(connectMock).toHaveBeenCalledWith(
-        expect.objectContaining({ token }),
-      );
-
-      // Clean up between iterations
-      document.head.innerHTML = "";
-      delete window.OmniFI;
+        expect(connectMock).toHaveBeenCalledWith(
+          expect.objectContaining({ token }),
+        );
+      } finally {
+        unmount();
+        document.head.innerHTML = "";
+        delete window.OmniFI;
+      }
     }
   });
 
