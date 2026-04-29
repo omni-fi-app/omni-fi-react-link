@@ -23,7 +23,7 @@ export interface OmniFIError {
 export interface OmniFIConnection {
   publicToken: string;
   institutionId: string;
-  accountType: "personal" | "business";
+  customerType: "personal" | "business";
 }
 
 export interface OmniFISuccessPayload {
