@@ -13,6 +13,7 @@ import { useOmniFILink } from "../useOmniFILink";
 import {
   type OmniFIConfig,
   type OmniFISuccessPayload,
+  type OmniFIConnectionLinkedPayload,
   type OmniFIError,
   OMNIFI_EVENTS,
 } from "../types";
@@ -154,8 +155,8 @@ describe("SDK passthrough — session-token exchange regression", () => {
     // Simulate the loader calling onSuccess after the widget completes
     const successPayload: OmniFISuccessPayload = {
       connections: [
-        { publicToken: "public-token-abc", institutionId: "inst-001" },
-        { publicToken: "public-token-def", institutionId: "inst-002" },
+        { publicToken: "public-token-abc", institutionId: "inst-001", accountType: "personal" },
+        { publicToken: "public-token-def", institutionId: "inst-002", accountType: "business" },
       ],
     };
 
@@ -191,7 +192,7 @@ describe("SDK passthrough — session-token exchange regression", () => {
     });
 
     const payload: OmniFISuccessPayload = {
-      connections: [{ publicToken: "pt-xyz", institutionId: "bank-mcb" }],
+      connections: [{ publicToken: "pt-xyz", institutionId: "bank-mcb", accountType: "personal" }],
     };
 
     act(() => {
@@ -204,6 +205,7 @@ describe("SDK passthrough — session-token exchange regression", () => {
     expect(calledWith.connections).toHaveLength(1);
     expect(calledWith.connections[0].publicToken).toBe("pt-xyz");
     expect(calledWith.connections[0].institutionId).toBe("bank-mcb");
+    expect(calledWith.connections[0].accountType).toBe("personal");
   });
 
   // ---------------------------------------------------------------------------
@@ -314,7 +316,11 @@ describe("SDK passthrough — session-token exchange regression", () => {
       result.current.open();
     });
 
-    const metadata = { institutionId: "inst-007", institutionName: "MCB" };
+    const metadata: OmniFIConnectionLinkedPayload = {
+      publicToken: "pt-inst-007",
+      institutionId: "inst-007",
+      accountType: "personal",
+    };
 
     act(() => {
       capturedConfig!.onEvent!(OMNIFI_EVENTS.CONNECTION_LINKED, metadata);
@@ -360,7 +366,9 @@ describe("SDK passthrough — session-token exchange regression", () => {
     // Fire the intermediate event only
     act(() => {
       capturedConfig!.onEvent!(OMNIFI_EVENTS.CONNECTION_LINKED, {
+        publicToken: "pt-inst-007",
         institutionId: "inst-007",
+        accountType: "personal",
       });
     });
 
