@@ -30,11 +30,7 @@ export interface OmniFISuccessPayload {
   connections: OmniFIConnection[];
 }
 
-export interface OmniFIConnectionLinkedPayload {
-  publicToken: string;
-  institutionId: string;
-  accountType: "personal" | "business";
-}
+export type OmniFIConnectionLinkedPayload = OmniFIConnection;
 
 export interface OmniFIConfig {
   token: string;

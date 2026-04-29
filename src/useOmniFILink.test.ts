@@ -85,6 +85,17 @@ describe("useOmniFILink Hook", () => {
     expect(result.current.isReady).toBe(true);
   });
 
+  test("open() throws when window.OmniFI is not defined", () => {
+    const { result } = renderHook(() => useOmniFILink(mockConfig));
+
+    // window.OmniFI is never set here — calling open() is a programming error
+    expect(() => {
+      act(() => {
+        result.current.open();
+      });
+    }).toThrow("[OmniFI] SDK not loaded");
+  });
+
   test("open() captures the returned instance and setTheme/setLanguage delegate to it", () => {
     const mockDestroy = mock(() => {});
     const mockSetTheme = mock(() => {});
