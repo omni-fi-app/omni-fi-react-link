@@ -87,8 +87,9 @@ export function useOmniFILink(config: OmniFIConfig): UseOmniFILinkResult {
 
   const open = useCallback(() => {
     if (!window.OmniFI) {
-      console.error("Omni-FI SDK is not loaded yet.");
-      return;
+      throw new Error(
+        "[OmniFI] SDK not loaded. Ensure the OmniFI loader script is present before calling open().",
+      );
     }
 
     // Destroy any existing widget instance before opening a new one

@@ -198,7 +198,9 @@ describe("SDK passthrough — session-token exchange regression", () => {
       capturedConfig!.onSuccess(payload);
     });
 
-    const [[calledWith]] = receivedPayload.mock.calls;
+    const calls = receivedPayload.mock.calls;
+    expect(calls.length).toBeGreaterThan(0);
+    const [calledWith] = calls[0];
     expect(calledWith.connections).toHaveLength(1);
     expect(calledWith.connections[0].publicToken).toBe("pt-xyz");
     expect(calledWith.connections[0].institutionId).toBe("bank-mcb");
