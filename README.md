@@ -42,9 +42,11 @@ import { useOmniFILink } from "@omni-fi/react-link";
 function ConnectButton({ linkToken }: { linkToken: string }) {
   const { open, isReady } = useOmniFILink({
     token: linkToken,
-    onSuccess(publicToken) {
-      // Exchange publicToken on your server for a permanent connection_id.
-      console.log("Connected:", publicToken);
+    onSuccess({ connections }) {
+      for (const { publicToken, institutionId, accountType } of connections) {
+        // Exchange each publicToken on your server for a permanent connection_id.
+        console.log("Connected:", institutionId, accountType, publicToken);
+      }
     },
     onError(error) {
       console.error("Link error:", error.code, error.message);
@@ -79,11 +81,36 @@ function ConnectButton({ linkToken }: { linkToken: string }) {
 
 | Property      | Type                                   | Required | Description                                |
 | ------------- | -------------------------------------- | -------- | ------------------------------------------ |
-| `token`       | `string`                               | Yes      | Short-lived `link_token` from your server. |
-| `onSuccess`   | `(publicToken: string) => void`        | Yes      | Called on successful connection.           |
-| `displayMode` | `'iframe' \| 'popup'`                  | No       | Defaults to `iframe`.                      |
-| `environment` | `'production' \| 'staging' \| 'local'` | No       | Defaults to `production`.                  |
-| `scriptUrl`   | `string`                               | No       | Override the CDN script URL. For enterprise clients that need to pin to a specific hosted version. |
+| `token`       | `string`                                      | Yes      | Short-lived `link_token` from your server. |
+| `onSuccess`   | `(payload: OmniFISuccessPayload) => void`     | Yes      | Called once all connections are complete. `payload.connections` is an array of `{ publicToken, institutionId, accountType }`. |
+| `onError`     | `(error: OmniFIError) => void`                | No       | Called when the widget reports an error. |
+| `onExit`      | `() => void`                                  | No       | Called when the user closes the widget without completing. |
+| `onEvent`     | `(eventName: string, metadata?) => void`      | No       | Called for intermediate events (e.g., `omni-fi:connection-linked` per bank linked). |
+| `displayMode` | `'iframe' \| 'popup'`                         | No       | Defaults to `iframe`.                      |
+| `environment` | `'production' \| 'staging' \| 'local'`        | No       | Defaults to `production`.                  |
+| `scriptUrl`   | `string`                                      | No       | Override the CDN script URL. For clients that need to pin to a specific hosted version. |
+
+---
+
+## Development
+
+### Test convention
+
+TypeScript tests are co-located alongside source files as `*.test.ts`. Do not use `__tests__/` directories.
+
+```
+src/
+├── useOmniFILink.ts
+├── useOmniFILink.test.ts       ← co-located unit tests
+├── sdk-passthrough.test.ts     ← co-located regression tests
+└── types.ts
+```
+
+Run tests with:
+
+```bash
+bun test
+```
 
 ---
 

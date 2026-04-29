@@ -9,14 +9,14 @@ import {
 } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { renderHook, act } from "@testing-library/react";
-import { useOmniFILink } from "../useOmniFILink";
+import { useOmniFILink } from "./useOmniFILink";
 import {
   type OmniFIConfig,
   type OmniFISuccessPayload,
   type OmniFIConnectionLinkedPayload,
   type OmniFIError,
   OMNIFI_EVENTS,
-} from "../types";
+} from "./types";
 
 /**
  * SDK passthrough regression tests for the session-token exchange feature.
