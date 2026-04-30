@@ -29,16 +29,18 @@ describe("useOmniFILink Hook", () => {
     GlobalRegistrator.unregister();
   });
 
-  // Clean up the DOM and the global window object before each test
+  let mockConfig: OmniFIConfig;
+
+  // Clean up the DOM, global state, and recreate mockConfig before each test so
+  // the onSuccess mock doesn't accumulate call counts across tests.
   beforeEach(() => {
     document.head.innerHTML = "";
     delete window.OmniFI;
+    mockConfig = {
+      token: "link-test-token",
+      onSuccess: mock(() => {}),
+    };
   });
-
-  const mockConfig: OmniFIConfig = {
-    token: "link-test-token",
-    onSuccess: mock(() => {}),
-  };
 
   test("initializes, injects the script, and sets isReady when it loads", () => {
     const { result } = renderHook(() => useOmniFILink(mockConfig));

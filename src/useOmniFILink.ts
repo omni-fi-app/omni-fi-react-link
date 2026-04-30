@@ -11,6 +11,14 @@ import {
 const SCRIPT_URL = "https://cdn.omni-fi.co/v1/omni-fi-connect.js";
 
 interface UseOmniFILinkResult {
+  /**
+   * Opens the OmniFI Link widget.
+   *
+   * @throws {Error} If `window.OmniFI` is not defined — the loader script must
+   * be present before calling `open()`. This is a programming error, not a
+   * runtime failure, and is intentionally thrown rather than reflected in the
+   * `error` state property (which only tracks script-load failures).
+   */
   open: () => void;
   destroy: () => void;
   isReady: boolean;

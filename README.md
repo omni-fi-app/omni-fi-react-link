@@ -8,11 +8,11 @@ Official React SDK for the [Omni-FI](https://omni-fi.co) Link widget. Provides a
 
 ## How it works
 
-The widget runs in an **isolated hosted iframe**. Cross-Origin Resource Sharing (CORS) rules prevent the parent page from reading keystrokes, ensuring raw credentials never touch your application. On success, the widget posts an opaque `public_token` back to your app — the only value your application ever handles.
+The widget runs in an **isolated hosted iframe**. Cross-Origin Resource Sharing (CORS) rules prevent the parent page from reading keystrokes, ensuring raw credentials never touch your application. On success, your `onSuccess` callback receives a payload containing one or more connections — each with an opaque `publicToken` to exchange on your server for a permanent connection ID.
 
 ```
 Your App  →  link_token  →  Widget (isolated iframe)
-Your App  ←  public_token  ←  Widget (postMessage on success)
+Your App  ←  { connections: [{ publicToken, institutionId, customerType }] }  ←  Widget
 ```
 
 ---
