@@ -236,7 +236,7 @@ describe("SDK passthrough — session-token exchange regression", () => {
     });
 
     const error: OmniFIError = {
-      code: "INVALID_TOKEN",
+      code: "LINK_TOKEN_INVALID",
       message: "The provided link token is invalid or expired.",
     };
 
