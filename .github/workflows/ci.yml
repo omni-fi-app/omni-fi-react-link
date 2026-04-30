@@ -21,8 +21,8 @@ jobs:
       - name: Install Dependencies
         run: bun install --frozen-lockfile
 
-      # - name: Lint Code
-      #   run: bun run lint  # Uncomment once linting rules are finalized in the UI phase
+      - name: Lint Code
+        run: bun run lint
 
       - name: Run Build
         run: bun run build
