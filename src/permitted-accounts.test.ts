@@ -48,7 +48,7 @@ describe("permittedAccountIds in connection events", () => {
   // Type compatibility — permittedAccountIds is optional on OmniFIConnection
   // ---------------------------------------------------------------------------
 
-  test("permittedAccountIds_is_optional: OmniFIConnection without permittedAccountIds is valid", () => {
+  test("OmniFIConnection is valid without permittedAccountIds", () => {
     const conn: OmniFIConnection = {
       publicToken: "pt-abc",
       institutionId: "inst-001",
@@ -59,7 +59,7 @@ describe("permittedAccountIds in connection events", () => {
     expect(conn.publicToken).toBe("pt-abc");
   });
 
-  test("no_breaking_change: existing consumer destructuring { publicToken, institutionId } still works", () => {
+  test("existing consumer destructuring { publicToken, institutionId } still works", () => {
     const payload: OmniFISuccessPayload = {
       connections: [
         { publicToken: "pt-xyz", institutionId: "bank-mcb", customerType: "personal" },
@@ -77,7 +77,7 @@ describe("permittedAccountIds in connection events", () => {
   // B2C: permittedAccountIds passed through in omni-fi:success
   // ---------------------------------------------------------------------------
 
-  test("permittedAccountIds_passed_through: onSuccess receives permittedAccountIds from loader (B2C)", () => {
+  test("onSuccess receives permittedAccountIds from the loader in B2C flows", () => {
     const onSuccess = mock((_payload: OmniFISuccessPayload) => {});
     let capturedConfig: OmniFIConfig | null = null;
 
@@ -129,7 +129,7 @@ describe("permittedAccountIds in connection events", () => {
     ]);
   });
 
-  test("permittedAccountIds_passed_through: multiple connections each carry their own permittedAccountIds", () => {
+  test("multiple connections each carry their own permittedAccountIds in onSuccess", () => {
     const onSuccess = mock((_payload: OmniFISuccessPayload) => {});
     let capturedConfig: OmniFIConfig | null = null;
 
@@ -184,7 +184,7 @@ describe("permittedAccountIds in connection events", () => {
   // B2B: permittedAccountIds is undefined (all accounts auto-confirmed)
   // ---------------------------------------------------------------------------
 
-  test("b2b_payload_undefined: onSuccess receives undefined permittedAccountIds for B2B flows", () => {
+  test("onSuccess receives undefined permittedAccountIds for B2B flows", () => {
     const onSuccess = mock((_payload: OmniFISuccessPayload) => {});
     let capturedConfig: OmniFIConfig | null = null;
 
@@ -234,7 +234,7 @@ describe("permittedAccountIds in connection events", () => {
   // connection-linked event: permittedAccountIds in intermediate event (B2C)
   // ---------------------------------------------------------------------------
 
-  test("permittedAccountIds_passed_through: onEvent connection-linked carries permittedAccountIds for B2C", () => {
+  test("onEvent connection-linked carries permittedAccountIds in B2C flows", () => {
     const onEvent = mock(
       (_eventName: string, _metadata?: Record<string, unknown>) => {},
     );
@@ -260,7 +260,7 @@ describe("permittedAccountIds in connection events", () => {
       result.current.open();
     });
 
-    const linkedMetadata: OmniFIConnectionLinkedPayload = {
+    const linkedMetadata: OmniFIConnectionLinkedPayload & Record<string, unknown> = {
       publicToken: "pt-linked-001",
       institutionId: "inst-linked",
       customerType: "personal",
@@ -268,10 +268,7 @@ describe("permittedAccountIds in connection events", () => {
     };
 
     act(() => {
-      capturedConfig!.onEvent!(
-        OMNIFI_EVENTS.CONNECTION_LINKED,
-        linkedMetadata as unknown as Record<string, unknown>,
-      );
+      capturedConfig!.onEvent!(OMNIFI_EVENTS.CONNECTION_LINKED, linkedMetadata);
     });
 
     expect(onEvent).toHaveBeenCalledTimes(1);
@@ -289,7 +286,7 @@ describe("permittedAccountIds in connection events", () => {
     ]);
   });
 
-  test("b2b_payload_undefined: onEvent connection-linked has no permittedAccountIds for B2B", () => {
+  test("onEvent connection-linked has no permittedAccountIds in B2B flows", () => {
     const onEvent = mock(
       (_eventName: string, _metadata?: Record<string, unknown>) => {},
     );
@@ -315,7 +312,7 @@ describe("permittedAccountIds in connection events", () => {
       result.current.open();
     });
 
-    const b2bLinkedMetadata: OmniFIConnectionLinkedPayload = {
+    const b2bLinkedMetadata: OmniFIConnectionLinkedPayload & Record<string, unknown> = {
       publicToken: "pt-b2b-linked",
       institutionId: "inst-corp",
       customerType: "business",
@@ -323,10 +320,7 @@ describe("permittedAccountIds in connection events", () => {
     };
 
     act(() => {
-      capturedConfig!.onEvent!(
-        OMNIFI_EVENTS.CONNECTION_LINKED,
-        b2bLinkedMetadata as unknown as Record<string, unknown>,
-      );
+      capturedConfig!.onEvent!(OMNIFI_EVENTS.CONNECTION_LINKED, b2bLinkedMetadata);
     });
 
     const firstCall = onEvent.mock.calls[0];

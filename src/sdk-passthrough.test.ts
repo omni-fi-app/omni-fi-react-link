@@ -318,17 +318,14 @@ describe("SDK passthrough — session-token exchange regression", () => {
       result.current.open();
     });
 
-    const metadata: OmniFIConnectionLinkedPayload = {
+    const metadata: OmniFIConnectionLinkedPayload & Record<string, unknown> = {
       publicToken: "pt-inst-007",
       institutionId: "inst-007",
       customerType: "personal",
     };
 
     act(() => {
-      capturedConfig!.onEvent!(
-        OMNIFI_EVENTS.CONNECTION_LINKED,
-        metadata as unknown as Record<string, unknown>,
-      );
+      capturedConfig!.onEvent!(OMNIFI_EVENTS.CONNECTION_LINKED, metadata);
     });
 
     expect(onEvent).toHaveBeenCalledTimes(1);
