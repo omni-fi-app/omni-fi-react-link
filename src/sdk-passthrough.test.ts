@@ -201,11 +201,13 @@ describe("SDK passthrough — session-token exchange regression", () => {
 
     const calls = receivedPayload.mock.calls;
     expect(calls.length).toBeGreaterThan(0);
-    const [calledWith] = calls[0];
+    const firstCall = calls[0];
+    expect(firstCall).toBeDefined();
+    const calledWith = firstCall![0];
     expect(calledWith.connections).toHaveLength(1);
-    expect(calledWith.connections[0].publicToken).toBe("pt-xyz");
-    expect(calledWith.connections[0].institutionId).toBe("bank-mcb");
-    expect(calledWith.connections[0].customerType).toBe("personal");
+    expect(calledWith.connections[0]!.publicToken).toBe("pt-xyz");
+    expect(calledWith.connections[0]!.institutionId).toBe("bank-mcb");
+    expect(calledWith.connections[0]!.customerType).toBe("personal");
   });
 
   // ---------------------------------------------------------------------------
@@ -323,7 +325,10 @@ describe("SDK passthrough — session-token exchange regression", () => {
     };
 
     act(() => {
-      capturedConfig!.onEvent!(OMNIFI_EVENTS.CONNECTION_LINKED, metadata);
+      capturedConfig!.onEvent!(
+        OMNIFI_EVENTS.CONNECTION_LINKED,
+        metadata as unknown as Record<string, unknown>,
+      );
     });
 
     expect(onEvent).toHaveBeenCalledTimes(1);
