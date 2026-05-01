@@ -66,6 +66,102 @@ function ConnectButton({ linkToken }: { linkToken: string }) {
 
 ---
 
+## Creating a link token
+
+The `token` prop is a short-lived `LinkToken` your server creates via the Omni-FI API before mounting the widget. It is never generated client-side.
+
+```bash
+POST /connections/link-token
+Authorization: Bearer <your-api-key>
+{
+  "ClientUserId": "user_123",
+  "RedirectOrigin": "https://your-app.com"
+}
+```
+
+Pass the returned `LinkToken` value directly as the `token` prop.
+
+### Customising the widget session
+
+All five fields below are optional. Omitting them keeps the current default behaviour — nothing changes for existing integrations.
+
+#### RequestedScopes — control the consent screen
+
+By default the widget asks the end user to consent to four data categories. You can limit this to only what your integration actually needs:
+
+```bash
+POST /connections/link-token
+{
+  "ClientUserId": "user_123",
+  "RedirectOrigin": "https://your-app.com",
+  "RequestedScopes": ["accounts", "data"]
+}
+```
+
+The consent screen then shows only "Account Access" and "Transaction Data" — a more targeted, trustworthy prompt for your users.
+
+| Scope | Description |
+|-------|-------------|
+| `accounts` | Bank account balances, account numbers, and metadata |
+| `insights` | Financial analytics and spending pattern analysis |
+| `alerts` | Transaction notifications and balance alerts |
+| `data` | Transaction history and statement data |
+
+Omit `RequestedScopes` to show all four. Passing an unknown identifier or an empty array returns `400 VALIDATION_ERROR`.
+
+---
+
+#### AppName and AppLogoUrl — white-label the widget
+
+Display your application's name and logo on the widget's consent screen:
+
+```bash
+{
+  "ClientUserId": "user_123",
+  "RedirectOrigin": "https://your-app.com",
+  "AppName": "Acme Finance",
+  "AppLogoUrl": "https://your-cdn.com/logo.png"
+}
+```
+
+`AppName` falls back to your ApiClient's registered name if omitted. `AppLogoUrl` is only displayed if provided — the widget shows text-only branding otherwise. Useful when one ApiClient powers multiple products or environments and each needs its own branding.
+
+---
+
+#### AccountSelectionEnabled — skip the account-select step
+
+After the user connects a bank, Omni-FI can show an account-selection screen where the user picks which accounts to import. You can override the default on a per-session basis:
+
+```bash
+{
+  "ClientUserId": "user_123",
+  "RedirectOrigin": "https://your-app.com",
+  "AccountSelectionEnabled": false
+}
+```
+
+`true` shows the account-selection step; `false` skips it and imports all accounts silently. Omit to inherit the setting configured on your ApiClient.
+
+---
+
+#### WebhookUrl — route events per session
+
+By default, `connection.created` webhook events are sent to the URL configured on your ApiClient's `WebhookEndpoint`. You can route a specific session's events to a different URL:
+
+```bash
+{
+  "ClientUserId": "user_123",
+  "RedirectOrigin": "https://your-app.com",
+  "WebhookUrl": "https://staging.your-app.com/webhooks/omni-fi"
+}
+```
+
+The same signing secret from your registered `WebhookEndpoint` is used to sign the delivery — verify the `X-Omni-FI-Signature` header as normal. If you have not configured a `WebhookEndpoint` on your ApiClient, `WebhookUrl` is stored but no event is fired.
+
+**Common use case:** route events from staging link tokens to your staging webhook receiver, and production tokens to your production receiver, without needing separate ApiClients.
+
+---
+
 ## API
 
 ### `useOmniFILink(config: OmniFIConfig)`
