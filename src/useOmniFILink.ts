@@ -11,6 +11,17 @@ import {
 const SCRIPT_URL = "https://cdn.omni-fi.co/v1/omni-fi-connect.js";
 
 interface UseOmniFILinkResult {
+  /**
+   * Opens the OmniFI Link widget.
+   *
+   * Wait for `isReady` to be `true` before calling this — `isReady` signals
+   * that the loader script has finished loading and executing and that
+   * `window.OmniFI` is available.
+   *
+   * @throws {Error} If called before `isReady` is `true` (i.e. `window.OmniFI`
+   * is not yet set). Thrown rather than reflected in the `error` state because
+   * this is a programming error, not a runtime failure.
+   */
   open: () => void;
   destroy: () => void;
   isReady: boolean;
@@ -87,8 +98,9 @@ export function useOmniFILink(config: OmniFIConfig): UseOmniFILinkResult {
 
   const open = useCallback(() => {
     if (!window.OmniFI) {
-      console.error("Omni-FI SDK is not loaded yet.");
-      return;
+      throw new Error(
+        "[OmniFI] open() called before the SDK is ready. Wait for isReady to be true before calling open().",
+      );
     }
 
     // Destroy any existing widget instance before opening a new one
