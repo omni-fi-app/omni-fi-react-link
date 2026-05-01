@@ -95,7 +95,7 @@ describe("useOmniFILink Hook", () => {
       act(() => {
         result.current.open();
       });
-    }).toThrow("[OmniFI] SDK not loaded");
+    }).toThrow("[OmniFI] open() called before the SDK is ready");
   });
 
   test("open() captures the returned instance and setTheme/setLanguage delegate to it", () => {

@@ -14,10 +14,13 @@ interface UseOmniFILinkResult {
   /**
    * Opens the OmniFI Link widget.
    *
-   * @throws {Error} If `window.OmniFI` is not defined — the loader script must
-   * be present before calling `open()`. This is a programming error, not a
-   * runtime failure, and is intentionally thrown rather than reflected in the
-   * `error` state property (which only tracks script-load failures).
+   * Wait for `isReady` to be `true` before calling this — `isReady` signals
+   * that the loader script has finished loading and executing and that
+   * `window.OmniFI` is available.
+   *
+   * @throws {Error} If called before `isReady` is `true` (i.e. `window.OmniFI`
+   * is not yet set). Thrown rather than reflected in the `error` state because
+   * this is a programming error, not a runtime failure.
    */
   open: () => void;
   destroy: () => void;
@@ -96,7 +99,7 @@ export function useOmniFILink(config: OmniFIConfig): UseOmniFILinkResult {
   const open = useCallback(() => {
     if (!window.OmniFI) {
       throw new Error(
-        "[OmniFI] SDK not loaded. Ensure the OmniFI loader script is present before calling open().",
+        "[OmniFI] open() called before the SDK is ready. Wait for isReady to be true before calling open().",
       );
     }
 
