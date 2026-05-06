@@ -50,6 +50,12 @@ export interface OmniFIConnection {
   publicToken: string;
   institutionId: string;
   customerType: "personal" | "business";
+  /**
+   * Account IDs the end-user explicitly permitted the client to access.
+   * Present for B2C flows where the user selects accounts in the widget.
+   * Undefined for B2B flows where all accounts are auto-confirmed.
+   */
+  permittedAccountIds?: string[];
 }
 
 export interface OmniFISuccessPayload {
