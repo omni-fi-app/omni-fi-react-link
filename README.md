@@ -252,7 +252,22 @@ for the MFA branch.
 | `inst_mock_sms`    | Mock SMS Bank               | `sms`     | `+230 5*** 1234`            | 4      |
 | `inst_mock_email`  | Mock Email Bank             | `email`   | `j***@example.com`          | 4      |
 | `inst_mock_totp`   | Mock Authenticator Bank     | `totp`    | _(none — authenticator app)_ | 6      |
-| `inst_mock`        | Mock Happy-Path Bank        | _(none)_  | _(no MFA — `user_good`)_     | —      |
+| `inst_mock`        | Mock Happy-Path Bank        | _(none)_  | _(no MFA — `sandbox_user`)_  | —      |
+
+### Sandbox usernames
+
+| Username       | Behaviour                                                       |
+| -------------- | --------------------------------------------------------------- |
+| `sandbox_user` | Happy path, no MFA branch.                                      |
+| `user_mfa`     | Triggers the MFA branch. The variant is determined by the chosen mock institution, not the username. |
+
+### Sandbox OTP codes
+
+| Code            | Branch        | Result                                   |
+| --------------- | ------------- | ---------------------------------------- |
+| `1234`          | `sms` / `email` | Accepted.                                |
+| `123456`        | `totp`        | Accepted.                                |
+| anything else   | any           | Rejected with `LOGIN_FAILED` (wrong-code path — useful for exercising error UX). |
 
 To exercise each MFA flow end-to-end:
 
@@ -261,7 +276,9 @@ To exercise each MFA flow end-to-end:
 3. Pick the mock bank that matches the variant you want to demo.
 4. Enter `user_mfa` as the username (any password). The widget surfaces the
    matching MFA screen.
-5. The TOTP mock accepts `123456`. SMS/EMAIL mocks accept any 4-digit code.
+5. Enter the canonical correct code for the variant (`1234` for SMS/EMAIL,
+   `123456` for TOTP). Any other code returns `LOGIN_FAILED`, letting you
+   exercise the wrong-code error path against the real backend.
 
 `onEvent` will fire `omni-fi:mfa-challenge` with the destination metadata above,
 letting you wire telemetry or analytics around each variant.
