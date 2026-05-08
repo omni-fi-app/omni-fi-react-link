@@ -181,10 +181,88 @@ The same signing secret from your registered `WebhookEndpoint` is used to sign t
 | `onSuccess`   | `(payload: OmniFISuccessPayload) => void`     | Yes      | Called once all connections are complete. `payload.connections` is an array of `{ publicToken, institutionId, customerType }`. |
 | `onError`     | `(error: OmniFIError) => void`                | No       | Called when the widget reports an error. |
 | `onExit`      | `() => void`                                  | No       | Called when the user closes the widget without completing. |
-| `onEvent`     | `(eventName: string, metadata?) => void`      | No       | Called for intermediate events (e.g., `omni-fi:connection-linked` per bank linked). |
+| `onEvent`     | `(eventName: string, metadata?) => void`      | No       | Called for intermediate events (e.g., `omni-fi:connection-linked` per bank linked, `omni-fi:mfa-required` when the institution requests an OTP). |
 | `displayMode` | `'iframe' \| 'popup'`                         | No       | Defaults to `iframe`.                      |
 | `environment` | `'production' \| 'staging' \| 'local'`        | No       | Defaults to `production`.                  |
 | `scriptUrl`   | `string`                                      | No       | Override the CDN script URL. For clients that need to pin to a specific hosted version. |
+
+---
+
+## MFA delivery metadata (`beta`)
+
+When an institution requires multi-factor authentication, the widget emits the
+`omni-fi:mfa-required` intermediate event (`OMNIFI_EVENTS.MFA_REQUIRED`). The
+event metadata is typed as `OmniFIMfaRequiredPayload`:
+
+| Field                | Type                                   | Notes                                                                                          |
+| -------------------- | -------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `institutionId`      | `string`                               | The institution this challenge belongs to.                                                     |
+| `mfaType`            | `'sms' \| 'email' \| 'totp'`           | The challenge variant detected at login.                                                       |
+| `mfaDestination`     | `string` (optional)                    | Pre-masked recipient (e.g. `"j***@example.com"`, `"+230 5*** 1234"`). Absent for `'totp'`.      |
+| `mfaDestinationKind` | `'email' \| 'phone'` (optional)        | Recipient kind. Absent for `'totp'`.                                                           |
+| `mfaLength`          | `number` (optional)                    | Expected digit count. Defaults: `4` for `sms`/`email`, `6` for `totp`.                          |
+
+```tsx
+import {
+  useOmniFILink,
+  OMNIFI_EVENTS,
+  type OmniFIMfaRequiredPayload,
+} from "@omni-fi/react-link";
+
+useOmniFILink({
+  token,
+  onSuccess: ({ connections }) => { /* ... */ },
+  onEvent(eventName, metadata) {
+    if (eventName === OMNIFI_EVENTS.MFA_REQUIRED) {
+      const mfa = metadata as OmniFIMfaRequiredPayload;
+      console.log(`MFA needed: ${mfa.mfaType}`, mfa.mfaDestination);
+    }
+  },
+});
+```
+
+> **Beta:** The `mfaDestination`, `mfaDestinationKind`, and `mfaLength` fields,
+> and the `'totp'` variant of `mfaType`, are tagged `beta` per the upstream Fern
+> availability. They will be promoted to GA after a stabilisation release.
+
+The `mfaDestination` string is masked **at source** — the SDK does not parse,
+validate, or alter it. Treat it as an opaque display string.
+
+> **Note on the cast:** `onEvent`'s `metadata` parameter is typed as
+> `Record<string, unknown>` because a single callback handles every event the
+> widget emits. The `as OmniFIMfaRequiredPayload` cast in the example is sound
+> only when `eventName === OMNIFI_EVENTS.MFA_REQUIRED`; the SDK forwards the
+> iframe payload unchanged but does not runtime-validate it, so guard on the
+> event name first (as shown) and treat optional fields as optional.
+
+---
+
+## Testing in sandbox
+
+When the `link_token` is issued in `sandbox` mode, the widget exercises a fully
+self-contained flow with no live bank traffic. The MFA variant the widget
+surfaces is determined by the **institution the user picks**, not the username.
+Username `user_mfa` (alongside any sandbox password) is the universal trigger
+for the MFA branch.
+
+| Institution ID     | Display name                | `mfaType` | Destination                 | Length |
+| ------------------ | --------------------------- | --------- | --------------------------- | ------ |
+| `inst_mock_sms`    | Mock SMS Bank               | `sms`     | `+230 5*** 1234`            | 4      |
+| `inst_mock_email`  | Mock Email Bank             | `email`   | `j***@example.com`          | 4      |
+| `inst_mock_totp`   | Mock Authenticator Bank     | `totp`    | _(none — authenticator app)_ | 6      |
+| `inst_mock`        | Mock Happy-Path Bank        | _(none)_  | _(no MFA — `user_good`)_     | —      |
+
+To exercise each MFA flow end-to-end:
+
+1. Issue a sandbox `link_token` from your server.
+2. Mount the widget with `useOmniFILink({ token, ... })`.
+3. Pick the mock bank that matches the variant you want to demo.
+4. Enter `user_mfa` as the username (any password). The widget surfaces the
+   matching MFA screen.
+5. The TOTP mock accepts `123456`. SMS/EMAIL mocks accept any 4-digit code.
+
+`onEvent` will fire `omni-fi:mfa-required` with the destination metadata above,
+letting you wire telemetry or analytics around each variant.
 
 ---
 

@@ -4,6 +4,7 @@ export const OMNIFI_EVENTS = {
   EXIT: "omni-fi:exit",
   READY: "omni-fi:ready",
   CONNECTION_LINKED: "omni-fi:connection-linked",
+  MFA_REQUIRED: "omni-fi:mfa-required",
   SET_THEME: "omni-fi:set-theme",
   SET_LANGUAGE: "omni-fi:set-language",
 } as const;
@@ -63,6 +64,68 @@ export interface OmniFISuccessPayload {
 }
 
 export type OmniFIConnectionLinkedPayload = OmniFIConnection;
+
+/**
+ * The kind of MFA challenge surfaced by the institution at runtime.
+ *
+ * - `'sms'` — one-time code sent to a phone number
+ * - `'email'` — one-time code sent to an email address
+ * - `'totp'` — rolling code from an authenticator app (RFC 6238); rotates every 30s
+ *
+ * @beta This enum is in beta and may gain additional variants in future releases.
+ */
+export type OmniFIMfaType = "sms" | "email" | "totp";
+
+/**
+ * The recipient kind for the MFA delivery target. Absent for `'totp'`.
+ */
+export type OmniFIMfaDestinationKind = "email" | "phone";
+
+/**
+ * Metadata payload for the {@link OMNIFI_EVENTS.MFA_REQUIRED} event.
+ *
+ * Forwarded verbatim from the hosted iframe. Consumers can subscribe via
+ * `onEvent` and cast `metadata` to this type when `eventName` is
+ * {@link OMNIFI_EVENTS.MFA_REQUIRED}.
+ *
+ * The `mfaDestination` / `mfaDestinationKind` / `mfaLength` fields are the
+ * camelCase wrappers around the backend's `delivery_target` / `delivery_kind`
+ * / `mfa_length` fields. The destination string is **always pre-masked at
+ * source** (e.g. `"j***@example.com"`, `"+230 5*** 1234"`) and should be
+ * treated as opaque — the SDK does not parse, validate, or alter it.
+ *
+ * For `mfaType === 'totp'` the destination fields are absent; codes come from
+ * an authenticator app and rotate every 30 seconds.
+ *
+ * @beta These fields are in beta per upstream Fern availability.
+ */
+export interface OmniFIMfaRequiredPayload {
+  /**
+   * The institution this MFA challenge belongs to.
+   */
+  institutionId: string;
+  /**
+   * The challenge variant detected at login. Determines what UI the widget
+   * surfaces and which fields are populated.
+   */
+  mfaType: OmniFIMfaType;
+  /**
+   * Pre-masked recipient string (e.g. `"j***@example.com"`, `"+230 5*** 1234"`).
+   * Absent for `mfaType: 'totp'` and may be absent for any institution that
+   * has not yet been wired to populate the field.
+   */
+  mfaDestination?: string;
+  /**
+   * Recipient kind paired with {@link mfaDestination}. Absent for
+   * `mfaType: 'totp'`.
+   */
+  mfaDestinationKind?: OmniFIMfaDestinationKind;
+  /**
+   * Expected digit count for the OTP. Defaults are caller-chosen when absent
+   * (typically 4 for `sms`/`email`, 6 for `totp`).
+   */
+  mfaLength?: number;
+}
 
 export interface OmniFIConfig {
   token: string;
