@@ -4,7 +4,7 @@ export const OMNIFI_EVENTS = {
   EXIT: "omni-fi:exit",
   READY: "omni-fi:ready",
   CONNECTION_LINKED: "omni-fi:connection-linked",
-  MFA_REQUIRED: "omni-fi:mfa-required",
+  MFA_CHALLENGE: "omni-fi:mfa-challenge",
   SET_THEME: "omni-fi:set-theme",
   SET_LANGUAGE: "omni-fi:set-language",
 } as const;
@@ -68,13 +68,20 @@ export type OmniFIConnectionLinkedPayload = OmniFIConnection;
 /**
  * The kind of MFA challenge surfaced by the institution at runtime.
  *
- * - `'sms'` — one-time code sent to a phone number
- * - `'email'` — one-time code sent to an email address
- * - `'totp'` — rolling code from an authenticator app (RFC 6238); rotates every 30s
+ * - `'none'` — no MFA required (returned on the institution model; the
+ *   `mfa-challenge` event itself does not fire for `'none'`).
+ * - `'sms'` — one-time code sent to a phone number.
+ * - `'email'` — one-time code sent to an email address.
+ * - `'totp'` — rolling code from an authenticator app (RFC 6238); rotates every 30s.
+ *
+ * **Single source of truth.** Derive "is MFA required?" from
+ * `mfaType !== 'none'`. There is intentionally no separate boolean for this —
+ * a redundant flag would drift from `mfaType` and is not part of the
+ * Omni-FI contract.
  *
  * @beta This union is in beta and may gain additional variants in future releases.
  */
-export type OmniFIMfaType = "sms" | "email" | "totp";
+export type OmniFIMfaType = "none" | "sms" | "email" | "totp";
 
 /**
  * The recipient kind for the MFA delivery target. Absent for `'totp'`.
@@ -82,11 +89,11 @@ export type OmniFIMfaType = "sms" | "email" | "totp";
 export type OmniFIMfaDestinationKind = "email" | "phone";
 
 /**
- * Metadata payload for the {@link OMNIFI_EVENTS.MFA_REQUIRED} event.
+ * Metadata payload for the {@link OMNIFI_EVENTS.MFA_CHALLENGE} event.
  *
  * Forwarded verbatim from the hosted iframe. Consumers can subscribe via
  * `onEvent` and cast `metadata` to this type when `eventName` is
- * {@link OMNIFI_EVENTS.MFA_REQUIRED}.
+ * {@link OMNIFI_EVENTS.MFA_CHALLENGE}.
  *
  * The `mfaDestination` / `mfaDestinationKind` / `mfaLength` fields are the
  * camelCase wrappers around the backend's `delivery_target` / `delivery_kind`
@@ -99,7 +106,7 @@ export type OmniFIMfaDestinationKind = "email" | "phone";
  *
  * @beta These fields are in beta per upstream Fern availability.
  */
-export interface OmniFIMfaRequiredPayload {
+export interface OmniFIMfaChallengePayload {
   /**
    * The institution this MFA challenge belongs to.
    */

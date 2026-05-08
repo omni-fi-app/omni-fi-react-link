@@ -181,7 +181,7 @@ The same signing secret from your registered `WebhookEndpoint` is used to sign t
 | `onSuccess`   | `(payload: OmniFISuccessPayload) => void`     | Yes      | Called once all connections are complete. `payload.connections` is an array of `{ publicToken, institutionId, customerType }`. |
 | `onError`     | `(error: OmniFIError) => void`                | No       | Called when the widget reports an error. |
 | `onExit`      | `() => void`                                  | No       | Called when the user closes the widget without completing. |
-| `onEvent`     | `(eventName: string, metadata?: Record<string, unknown>) => void` | No       | Called for intermediate events (e.g., `omni-fi:connection-linked` per bank linked, `omni-fi:mfa-required` when the institution requests an OTP). |
+| `onEvent`     | `(eventName: string, metadata?: Record<string, unknown>) => void` | No       | Called for intermediate events (e.g., `omni-fi:connection-linked` per bank linked, `omni-fi:mfa-challenge` when the institution requests an OTP). |
 | `displayMode` | `'iframe' \| 'popup'`                         | No       | Defaults to `iframe`.                      |
 | `environment` | `'production' \| 'staging' \| 'local'`        | No       | Defaults to `production`.                  |
 | `scriptUrl`   | `string`                                      | No       | Override the CDN script URL. For clients that need to pin to a specific hosted version. |
@@ -191,13 +191,13 @@ The same signing secret from your registered `WebhookEndpoint` is used to sign t
 ## MFA delivery metadata (`beta`)
 
 When an institution requires multi-factor authentication, the widget emits the
-`omni-fi:mfa-required` intermediate event (`OMNIFI_EVENTS.MFA_REQUIRED`). The
-event metadata is typed as `OmniFIMfaRequiredPayload`:
+`omni-fi:mfa-challenge` intermediate event (`OMNIFI_EVENTS.MFA_CHALLENGE`). The
+event metadata is typed as `OmniFIMfaChallengePayload`:
 
 | Field                | Type                                   | Notes                                                                                          |
 | -------------------- | -------------------------------------- | ---------------------------------------------------------------------------------------------- |
 | `institutionId`      | `string`                               | The institution this challenge belongs to.                                                     |
-| `mfaType`            | `'sms' \| 'email' \| 'totp'`           | The challenge variant detected at login.                                                       |
+| `mfaType`            | `'none' \| 'sms' \| 'email' \| 'totp'` | The challenge variant detected at login. Derive "is MFA required?" from `mfaType !== 'none'` — there is intentionally no separate boolean for this. |
 | `mfaDestination`     | `string` (optional)                    | Pre-masked recipient (e.g. `"j***@example.com"`, `"+230 5*** 1234"`). Absent for `'totp'`.      |
 | `mfaDestinationKind` | `'email' \| 'phone'` (optional)        | Recipient kind. Absent for `'totp'`.                                                           |
 | `mfaLength`          | `number` (optional)                    | Expected digit count. When the field is absent, the consumer chooses a default — typically `4` for `sms`/`email` and `6` for `totp` (RFC 6238).      |
@@ -206,16 +206,18 @@ event metadata is typed as `OmniFIMfaRequiredPayload`:
 import {
   useOmniFILink,
   OMNIFI_EVENTS,
-  type OmniFIMfaRequiredPayload,
+  type OmniFIMfaChallengePayload,
 } from "@omni-fi/react-link";
 
 useOmniFILink({
   token,
   onSuccess: ({ connections }) => { /* ... */ },
   onEvent(eventName, metadata) {
-    if (eventName === OMNIFI_EVENTS.MFA_REQUIRED) {
-      const mfa = metadata as OmniFIMfaRequiredPayload;
-      console.log(`MFA needed: ${mfa.mfaType}`, mfa.mfaDestination);
+    if (eventName === OMNIFI_EVENTS.MFA_CHALLENGE) {
+      const mfa = metadata as OmniFIMfaChallengePayload;
+      if (mfa.mfaType !== "none") {
+        console.log(`MFA needed: ${mfa.mfaType}`, mfa.mfaDestination);
+      }
     }
   },
 });
@@ -230,8 +232,8 @@ validate, or alter it. Treat it as an opaque display string.
 
 > **Note on the cast:** `onEvent`'s `metadata` parameter is typed as
 > `Record<string, unknown>` because a single callback handles every event the
-> widget emits. The `as OmniFIMfaRequiredPayload` cast in the example is sound
-> only when `eventName === OMNIFI_EVENTS.MFA_REQUIRED`; the SDK forwards the
+> widget emits. The `as OmniFIMfaChallengePayload` cast in the example is sound
+> only when `eventName === OMNIFI_EVENTS.MFA_CHALLENGE`; the SDK forwards the
 > iframe payload unchanged but does not runtime-validate it, so guard on the
 > event name first (as shown) and treat optional fields as optional.
 
@@ -261,7 +263,7 @@ To exercise each MFA flow end-to-end:
    matching MFA screen.
 5. The TOTP mock accepts `123456`. SMS/EMAIL mocks accept any 4-digit code.
 
-`onEvent` will fire `omni-fi:mfa-required` with the destination metadata above,
+`onEvent` will fire `omni-fi:mfa-challenge` with the destination metadata above,
 letting you wire telemetry or analytics around each variant.
 
 ---
