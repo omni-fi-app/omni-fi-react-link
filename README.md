@@ -181,7 +181,7 @@ The same signing secret from your registered `WebhookEndpoint` is used to sign t
 | `onSuccess`   | `(payload: OmniFISuccessPayload) => void`     | Yes      | Called once all connections are complete. `payload.connections` is an array of `{ publicToken, institutionId, customerType }`. |
 | `onError`     | `(error: OmniFIError) => void`                | No       | Called when the widget reports an error. |
 | `onExit`      | `() => void`                                  | No       | Called when the user closes the widget without completing. |
-| `onEvent`     | `(eventName: string, metadata?) => void`      | No       | Called for intermediate events (e.g., `omni-fi:connection-linked` per bank linked, `omni-fi:mfa-required` when the institution requests an OTP). |
+| `onEvent`     | `(eventName: string, metadata?: Record<string, unknown>) => void` | No       | Called for intermediate events (e.g., `omni-fi:connection-linked` per bank linked, `omni-fi:mfa-required` when the institution requests an OTP). |
 | `displayMode` | `'iframe' \| 'popup'`                         | No       | Defaults to `iframe`.                      |
 | `environment` | `'production' \| 'staging' \| 'local'`        | No       | Defaults to `production`.                  |
 | `scriptUrl`   | `string`                                      | No       | Override the CDN script URL. For clients that need to pin to a specific hosted version. |
@@ -200,7 +200,7 @@ event metadata is typed as `OmniFIMfaRequiredPayload`:
 | `mfaType`            | `'sms' \| 'email' \| 'totp'`           | The challenge variant detected at login.                                                       |
 | `mfaDestination`     | `string` (optional)                    | Pre-masked recipient (e.g. `"j***@example.com"`, `"+230 5*** 1234"`). Absent for `'totp'`.      |
 | `mfaDestinationKind` | `'email' \| 'phone'` (optional)        | Recipient kind. Absent for `'totp'`.                                                           |
-| `mfaLength`          | `number` (optional)                    | Expected digit count. Defaults: `4` for `sms`/`email`, `6` for `totp`.                          |
+| `mfaLength`          | `number` (optional)                    | Expected digit count. When the field is absent, the consumer chooses a default — typically `4` for `sms`/`email` and `6` for `totp` (RFC 6238).      |
 
 ```tsx
 import {

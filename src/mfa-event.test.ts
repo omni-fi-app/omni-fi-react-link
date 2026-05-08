@@ -281,10 +281,10 @@ describe("MFA delivery metadata — onEvent propagation", () => {
   });
 
   // ---------------------------------------------------------------------------
-  // MFA event is intermediate — does NOT trigger onSuccess
+  // MFA event is intermediate — passthrough invariants
   // ---------------------------------------------------------------------------
 
-  test("mfa-required event does NOT trigger onSuccess", () => {
+  test("SDK passes onEvent and onSuccess through to connect() without wrapping", () => {
     const onEvent = mock(
       (_eventName: string, _metadata?: Record<string, unknown>) => {},
     );
@@ -310,6 +310,14 @@ describe("MFA delivery metadata — onEvent propagation", () => {
       result.current.open();
     });
 
+    // The SDK must hand the consumer's callbacks to the loader by reference —
+    // wrapping them would let the hook bridge intermediate events (mfa-required)
+    // to terminal callbacks (onSuccess) and silently change the public contract.
+    expect(capturedConfig!.onEvent).toBe(onEvent);
+    expect(capturedConfig!.onSuccess).toBe(onSuccess);
+
+    // Mirrors the existing connection-linked passthrough test: confirms that
+    // firing the intermediate event does not invoke the terminal onSuccess.
     act(() => {
       capturedConfig!.onEvent!(OMNIFI_EVENTS.MFA_REQUIRED, {
         institutionId: "inst_mock_sms",

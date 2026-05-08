@@ -72,7 +72,7 @@ export type OmniFIConnectionLinkedPayload = OmniFIConnection;
  * - `'email'` — one-time code sent to an email address
  * - `'totp'` — rolling code from an authenticator app (RFC 6238); rotates every 30s
  *
- * @beta This enum is in beta and may gain additional variants in future releases.
+ * @beta This union is in beta and may gain additional variants in future releases.
  */
 export type OmniFIMfaType = "sms" | "email" | "totp";
 
