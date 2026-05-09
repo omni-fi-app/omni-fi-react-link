@@ -8,11 +8,11 @@ Official React SDK for the [Omni-FI](https://omni-fi.co) Link widget. Provides a
 
 ## How it works
 
-The widget runs in an **isolated hosted iframe**. Cross-Origin Resource Sharing (CORS) rules prevent the parent page from reading keystrokes, ensuring raw credentials never touch your application. On success, your `onSuccess` callback receives a payload containing one or more connections — each with an opaque `publicToken` to exchange on your server for a permanent connection ID.
+The widget runs in an **isolated hosted iframe**. Cross-Origin Resource Sharing (CORS) rules prevent the parent page from reading keystrokes, ensuring raw credentials never touch your application. On success, your `onSuccess` callback receives a payload containing one or more connections — each with both a stable `connectionId` (the persisted Connection's UUID) and an opaque `publicToken` you can exchange server-side.
 
 ```
 Your App  →  link_token  →  Widget (isolated iframe)
-Your App  ←  { connections: [{ publicToken, institutionId, customerType }] }  ←  Widget
+Your App  ←  { connections: [{ publicToken, connectionId, institutionId, customerType }] }  ←  Widget
 ```
 
 ---
@@ -43,9 +43,11 @@ function ConnectButton({ linkToken }: { linkToken: string }) {
   const { open, isReady } = useOmniFILink({
     token: linkToken,
     onSuccess({ connections }) {
-      for (const { publicToken, institutionId, customerType } of connections) {
-        // Exchange each publicToken on your server for a permanent connection_id.
-        console.log("Connected:", institutionId, customerType, publicToken);
+      for (const { publicToken, connectionId, institutionId, customerType } of connections) {
+        // `connectionId` addresses the persisted Connection record directly
+        // (e.g. PUT /connections/{id}/accounts). Exchange `publicToken` on
+        // your server for an opaque API token when needed.
+        console.log("Connected:", institutionId, customerType, connectionId, publicToken);
       }
     },
     onError(error) {
@@ -178,7 +180,7 @@ The same signing secret from your registered `WebhookEndpoint` is used to sign t
 | Property      | Type                                   | Required | Description                                |
 | ------------- | -------------------------------------- | -------- | ------------------------------------------ |
 | `token`       | `string`                                      | Yes      | Short-lived `link_token` from your server. |
-| `onSuccess`   | `(payload: OmniFISuccessPayload) => void`     | Yes      | Called once all connections are complete. `payload.connections` is an array of `{ publicToken, institutionId, customerType }`. |
+| `onSuccess`   | `(payload: OmniFISuccessPayload) => void`     | Yes      | Called once all connections are complete. `payload.connections` is an array of `{ publicToken, connectionId, institutionId, customerType }`. `connectionId` is the persisted Connection's UUID — addressable via the connection-scoped REST endpoints; `publicToken` is the opaque token you exchange server-side. |
 | `onError`     | `(error: OmniFIError) => void`                | No       | Called when the widget reports an error. |
 | `onExit`      | `() => void`                                  | No       | Called when the user closes the widget without completing. |
 | `onEvent`     | `(eventName: string, metadata?: Record<string, unknown>) => void` | No       | Called for intermediate events (e.g., `omni-fi:connection-linked` per bank linked, `omni-fi:mfa-challenge` when the institution requests an OTP). |

@@ -49,6 +49,21 @@ export interface OmniFIError {
 
 export interface OmniFIConnection {
   publicToken: string;
+  /**
+   * UUID of the persisted Connection record on the Omni-FI backend.
+   *
+   * Use this to call connection-scoped endpoints
+   * (`PUT /connections/{id}/accounts`, `GET /connections/{id}/accounts`,
+   * `DELETE /connections/{id}`) without needing to exchange the
+   * `publicToken` first.
+   *
+   * Surfaced on every connection record — both the per-bank
+   * `omni-fi:connection-linked` event and the final `onSuccess` payload —
+   * so a host backend that loses the user mid-flow (e.g. browser closed
+   * after link-connect but before Account-Select Continue) can still
+   * address the persisted connection.
+   */
+  connectionId: string;
   institutionId: string;
   customerType: "personal" | "business";
   /**

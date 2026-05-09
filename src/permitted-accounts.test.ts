@@ -51,6 +51,7 @@ describe("permittedAccountIds in connection events", () => {
   test("OmniFIConnection is valid without permittedAccountIds", () => {
     const conn: OmniFIConnection = {
       publicToken: "pt-abc",
+      connectionId: "conn-uuid-abc",
       institutionId: "inst-001",
       customerType: "personal",
     };
@@ -62,7 +63,7 @@ describe("permittedAccountIds in connection events", () => {
   test("existing consumer destructuring { publicToken, institutionId } still works", () => {
     const payload: OmniFISuccessPayload = {
       connections: [
-        { publicToken: "pt-xyz", institutionId: "bank-mcb", customerType: "personal" },
+        { publicToken: "pt-xyz", connectionId: "conn-uuid-xyz", institutionId: "bank-mcb", customerType: "personal" },
       ],
     };
 
@@ -104,6 +105,7 @@ describe("permittedAccountIds in connection events", () => {
       connections: [
         {
           publicToken: "pt-b2c-001",
+          connectionId: "conn-uuid-b2c-001",
           institutionId: "inst-mcb",
           customerType: "personal",
           permittedAccountIds: ["acc-uuid-1111", "acc-uuid-2222", "acc-uuid-3333"],
@@ -156,12 +158,14 @@ describe("permittedAccountIds in connection events", () => {
       connections: [
         {
           publicToken: "pt-001",
+          connectionId: "conn-uuid-001",
           institutionId: "inst-a",
           customerType: "personal",
           permittedAccountIds: ["acc-a1", "acc-a2"],
         },
         {
           publicToken: "pt-002",
+          connectionId: "conn-uuid-002",
           institutionId: "inst-b",
           customerType: "business",
           permittedAccountIds: ["acc-b1"],
@@ -211,6 +215,7 @@ describe("permittedAccountIds in connection events", () => {
       connections: [
         {
           publicToken: "pt-b2b-001",
+          connectionId: "conn-uuid-b2b-001",
           institutionId: "inst-corp",
           customerType: "business",
           // permittedAccountIds intentionally omitted — B2B auto-confirms all
@@ -262,6 +267,7 @@ describe("permittedAccountIds in connection events", () => {
 
     const linkedMetadata: OmniFIConnectionLinkedPayload & Record<string, unknown> = {
       publicToken: "pt-linked-001",
+      connectionId: "conn-uuid-linked-001",
       institutionId: "inst-linked",
       customerType: "personal",
       permittedAccountIds: ["acc-linked-1", "acc-linked-2"],
@@ -314,6 +320,7 @@ describe("permittedAccountIds in connection events", () => {
 
     const b2bLinkedMetadata: OmniFIConnectionLinkedPayload & Record<string, unknown> = {
       publicToken: "pt-b2b-linked",
+      connectionId: "conn-uuid-b2b-linked",
       institutionId: "inst-corp",
       customerType: "business",
       // permittedAccountIds intentionally omitted — B2B

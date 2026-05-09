@@ -155,8 +155,8 @@ describe("SDK passthrough — session-token exchange regression", () => {
     // Simulate the loader calling onSuccess after the widget completes
     const successPayload: OmniFISuccessPayload = {
       connections: [
-        { publicToken: "public-token-abc", institutionId: "inst-001", customerType: "personal" },
-        { publicToken: "public-token-def", institutionId: "inst-002", customerType: "business" },
+        { publicToken: "public-token-abc", connectionId: "conn-uuid-001", institutionId: "inst-001", customerType: "personal" },
+        { publicToken: "public-token-def", connectionId: "conn-uuid-002", institutionId: "inst-002", customerType: "business" },
       ],
     };
 
@@ -192,7 +192,7 @@ describe("SDK passthrough — session-token exchange regression", () => {
     });
 
     const payload: OmniFISuccessPayload = {
-      connections: [{ publicToken: "pt-xyz", institutionId: "bank-mcb", customerType: "personal" }],
+      connections: [{ publicToken: "pt-xyz", connectionId: "conn-uuid-xyz", institutionId: "bank-mcb", customerType: "personal" }],
     };
 
     act(() => {
@@ -320,6 +320,7 @@ describe("SDK passthrough — session-token exchange regression", () => {
 
     const metadata: OmniFIConnectionLinkedPayload & Record<string, unknown> = {
       publicToken: "pt-inst-007",
+      connectionId: "conn-uuid-inst-007",
       institutionId: "inst-007",
       customerType: "personal",
     };
@@ -369,6 +370,7 @@ describe("SDK passthrough — session-token exchange regression", () => {
     act(() => {
       capturedConfig!.onEvent!(OMNIFI_EVENTS.CONNECTION_LINKED, {
         publicToken: "pt-inst-007",
+        connectionId: "conn-uuid-inst-007",
         institutionId: "inst-007",
         customerType: "personal",
       });
