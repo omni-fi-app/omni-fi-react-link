@@ -199,7 +199,7 @@ event metadata is typed as `OmniFIMfaChallengePayload`:
 | Field                | Type                                   | Notes                                                                                          |
 | -------------------- | -------------------------------------- | ---------------------------------------------------------------------------------------------- |
 | `institutionId`      | `string`                               | The institution this challenge belongs to.                                                     |
-| `mfaType`            | `'none' \| 'sms' \| 'email' \| 'totp'` | The challenge variant detected at login. Derive "is MFA required?" from `mfaType !== 'none'` — there is intentionally no separate boolean for this. |
+| `mfaType`            | `'sms' \| 'email' \| 'totp'`           | The challenge variant detected at login. The event only fires when MFA is actually required, so `'none'` is intentionally excluded here (use the wider `OmniFIMfaType` union for institution-level fields where `'none'` is valid). There is intentionally no separate `mfaRequired` boolean — the event firing **is** the signal. |
 | `mfaDestination`     | `string` (optional)                    | Pre-masked recipient (e.g. `"j***@example.com"`, `"+230 5*** 1234"`). Absent for `'totp'`.      |
 | `mfaDestinationKind` | `'email' \| 'phone'` (optional)        | Recipient kind. Absent for `'totp'`.                                                           |
 | `mfaLength`          | `number` (optional)                    | Expected digit count. When the field is absent, the consumer chooses a default — typically `4` for `sms`/`email` and `6` for `totp` (RFC 6238).      |
@@ -217,9 +217,9 @@ useOmniFILink({
   onEvent(eventName, metadata) {
     if (eventName === OMNIFI_EVENTS.MFA_CHALLENGE) {
       const mfa = metadata as OmniFIMfaChallengePayload;
-      if (mfa.mfaType !== "none") {
-        console.log(`MFA needed: ${mfa.mfaType}`, mfa.mfaDestination);
-      }
+      // `mfaType` is narrowed to 'sms' | 'email' | 'totp' here — the event
+      // never fires for institutions whose mode is 'none'.
+      console.log(`MFA needed: ${mfa.mfaType}`, mfa.mfaDestination);
     }
   },
 });
@@ -244,24 +244,34 @@ validate, or alter it. Treat it as an opaque display string.
 ## Testing in sandbox
 
 When the `link_token` is issued in `sandbox` mode, the widget exercises a fully
-self-contained flow with no live bank traffic. The MFA variant the widget
-surfaces is determined by the **institution the user picks**, not the username.
-Username `user_mfa` (alongside any sandbox password) is the universal trigger
-for the MFA branch.
+self-contained flow with no live bank traffic. **Two independent inputs**
+control the flow:
+
+1. **Username** chooses the auth path — `sandbox_user` follows the happy
+   path, `user_mfa` triggers the MFA branch (when the institution supports
+   MFA).
+2. **Institution** chooses the MFA variant — `inst_mock_sms` /
+   `inst_mock_email` / `inst_mock_totp` map 1:1 onto the three MFA modes.
+   `inst_mock` is the no-MFA institution and ignores `user_mfa`.
+
+The `omni-fi:mfa-challenge` event fires only when both inputs select an MFA
+flow (an MFA-capable institution **and** the `user_mfa` username).
+
+### Mock institutions
 
 | Institution ID     | Display name                | `mfaType` | Destination                 | Length |
 | ------------------ | --------------------------- | --------- | --------------------------- | ------ |
 | `inst_mock_sms`    | Mock SMS Bank               | `sms`     | `+230 5*** 1234`            | 4      |
 | `inst_mock_email`  | Mock Email Bank             | `email`   | `j***@example.com`          | 4      |
 | `inst_mock_totp`   | Mock Authenticator Bank     | `totp`    | _(none — authenticator app)_ | 6      |
-| `inst_mock`        | Mock Happy-Path Bank        | _(none)_  | _(no MFA — `sandbox_user`)_  | —      |
+| `inst_mock`        | Mock Happy-Path Bank        | `none`    | _(no MFA branch)_            | —      |
 
 ### Sandbox usernames
 
-| Username       | Behaviour                                                       |
-| -------------- | --------------------------------------------------------------- |
-| `sandbox_user` | Happy path, no MFA branch.                                      |
-| `user_mfa`     | Triggers the MFA branch. The variant is determined by the chosen mock institution, not the username. |
+| Username       | Behaviour                                                                                |
+| -------------- | ---------------------------------------------------------------------------------------- |
+| `sandbox_user` | Happy path on any institution — no MFA branch even on MFA-capable mocks.                  |
+| `user_mfa`     | Triggers the MFA branch on MFA-capable institutions (`inst_mock_sms` / `_email` / `_totp`). On `inst_mock` (`mfaType: 'none'`) it falls through to the happy path. |
 
 ### Sandbox OTP codes
 
@@ -275,7 +285,8 @@ To exercise each MFA flow end-to-end:
 
 1. Issue a sandbox `link_token` from your server.
 2. Mount the widget with `useOmniFILink({ token, ... })`.
-3. Pick the mock bank that matches the variant you want to demo.
+3. Pick the MFA-capable mock bank that matches the variant you want to demo
+   (`inst_mock_sms` / `inst_mock_email` / `inst_mock_totp`).
 4. Enter `user_mfa` as the username (any password). The widget surfaces the
    matching MFA screen.
 5. Enter the canonical correct code for the variant (`1234` for SMS/EMAIL,

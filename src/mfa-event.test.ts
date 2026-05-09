@@ -363,21 +363,17 @@ describe("MFA delivery metadata — onEvent propagation", () => {
   });
 
   // ---------------------------------------------------------------------------
-  // Contract: mfaType !== 'none' is the single source of truth — no MfaRequired
+  // Contract: no `mfaRequired` boolean — `mfaType` is the single source of truth
   // ---------------------------------------------------------------------------
 
-  test("consumers derive 'is MFA required?' from mfaType !== 'none' alone", () => {
-    // Per the upstream contract (omni-fi-core PR #210 + #213), the boolean
-    // `MfaRequired` was removed because it always tracked `mfaType !== 'none'`
-    // and the two could drift. The SDK's payload mirrors that — there is no
-    // `mfaRequired` field, only `mfaType`.
-    const isMfaRequired = (p: OmniFIMfaChallengePayload): boolean =>
-      p.mfaType !== "none";
-
-    const noMfa: OmniFIMfaChallengePayload = {
-      institutionId: "inst_mock",
-      mfaType: "none",
-    };
+  test("payload type has no `mfaRequired` key — `mfaType` is canonical", () => {
+    // The Omni-FI contract intentionally has no `mfaRequired` boolean;
+    // institution-level "needs MFA?" is `mfaType !== 'none'` on the wider
+    // OmniFIMfaType union. On the event payload itself, `mfaType` is
+    // narrowed to OmniFIMfaChallengeType (excludes `'none'`) so the type
+    // system enforces "an MFA event always represents a real challenge".
+    // If a future upstream change re-introduces a `mfaRequired` field, the
+    // runtime assertions below catch it before consumers do.
     const sms: OmniFIMfaChallengePayload = {
       institutionId: "inst_mock_sms",
       mfaType: "sms",
@@ -391,20 +387,14 @@ describe("MFA delivery metadata — onEvent propagation", () => {
       mfaLength: 6,
     };
 
-    expect(isMfaRequired(noMfa)).toBe(false);
-    expect(isMfaRequired(sms)).toBe(true);
-    expect(isMfaRequired(totp)).toBe(true);
-
-    // Also: the runtime payload object has no `mfaRequired` key. If the
-    // upstream contract drifts and starts emitting one, this assertion fires.
     expect("mfaRequired" in sms).toBe(false);
     expect("mfaRequired" in totp).toBe(false);
   });
 
   test("event with mfaType: 'sms' + DeliveryTarget propagates unchanged through onEvent", () => {
-    // Mirrors the canonical contract from coordination_mfa_contract.md:
-    //   { mfaType, mfaDestination, mfaDestinationKind, mfaLength }
-    // Plus institutionId for SDK-level context. No mfaRequired anywhere.
+    // Canonical contract for the event metadata:
+    //   { institutionId, mfaType, mfaDestination, mfaDestinationKind, mfaLength }
+    // No mfaRequired anywhere — `mfaType` is the single source of truth.
     const onEvent = mock(
       (_eventName: string, _metadata?: Record<string, unknown>) => {},
     );

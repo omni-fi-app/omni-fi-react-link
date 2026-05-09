@@ -81,22 +81,32 @@ export interface OmniFISuccessPayload {
 export type OmniFIConnectionLinkedPayload = OmniFIConnection;
 
 /**
- * The kind of MFA challenge surfaced by the institution at runtime.
+ * The institution-level MFA mode.
  *
- * - `'none'` — no MFA required (returned on the institution model; the
- *   `mfa-challenge` event itself does not fire for `'none'`).
+ * - `'none'` — institution does not require MFA.
  * - `'sms'` — one-time code sent to a phone number.
  * - `'email'` — one-time code sent to an email address.
  * - `'totp'` — rolling code from an authenticator app (RFC 6238); rotates every 30s.
  *
- * **Single source of truth.** Derive "is MFA required?" from
- * `mfaType !== 'none'`. There is intentionally no separate boolean for this —
- * a redundant flag would drift from `mfaType` and is not part of the
- * Omni-FI contract.
+ * **Single source of truth.** "Is MFA required?" is `mfaType !== 'none'`.
+ * There is intentionally no separate boolean — a redundant flag would drift
+ * from `mfaType` and is not part of the Omni-FI contract.
+ *
+ * The {@link OmniFIMfaChallengePayload} on the `omni-fi:mfa-challenge` event
+ * narrows this to {@link OmniFIMfaChallengeType} (excludes `'none'`) because
+ * the event only fires when MFA is actually required.
  *
  * @beta This union is in beta and may gain additional variants in future releases.
  */
 export type OmniFIMfaType = "none" | "sms" | "email" | "totp";
+
+/**
+ * The MFA variants that can appear on an `omni-fi:mfa-challenge` event —
+ * {@link OmniFIMfaType} narrowed to exclude `'none'`. The event does not fire
+ * for institutions whose `mfaType` is `'none'`, so consumers handling this
+ * event do not need to guard against it.
+ */
+export type OmniFIMfaChallengeType = Exclude<OmniFIMfaType, "none">;
 
 /**
  * The recipient kind for the MFA delivery target. Absent for `'totp'`.
@@ -128,9 +138,10 @@ export interface OmniFIMfaChallengePayload {
   institutionId: string;
   /**
    * The challenge variant detected at login. Determines what UI the widget
-   * surfaces and which fields are populated.
+   * surfaces and which fields are populated. Narrowed to exclude `'none'`
+   * because the event only fires when MFA is actually required.
    */
-  mfaType: OmniFIMfaType;
+  mfaType: OmniFIMfaChallengeType;
   /**
    * Pre-masked recipient string (e.g. `"j***@example.com"`, `"+230 5*** 1234"`).
    * Absent for `mfaType: 'totp'` and may be absent for any institution that
@@ -138,7 +149,7 @@ export interface OmniFIMfaChallengePayload {
    */
   mfaDestination?: string;
   /**
-   * Recipient kind paired with {@link mfaDestination}. Absent for
+   * Recipient kind paired with `mfaDestination`. Absent for
    * `mfaType: 'totp'`.
    */
   mfaDestinationKind?: OmniFIMfaDestinationKind;
@@ -160,6 +171,13 @@ export interface OmniFIConfig {
    * Override the CDN URL for the Omni-FI Connect script.
    * Useful for enterprise clients that need to pin to a specific hosted version.
    * If omitted, the SDK loads the latest version from the default CDN.
+   *
+   * **Widget / SDK version coupling.** This SDK's TypeScript types describe
+   * the contract emitted by the **current** widget release. Pinning
+   * `scriptUrl` to an older widget version may cause runtime payloads to
+   * omit fields the types declare as required (for example, older widgets
+   * predate `OmniFIConnection.connectionId`). Pin the SDK to a matching
+   * version when pinning the widget — or stay on `latest` for both.
    */
   scriptUrl?: string;
   onSuccess: (payload: OmniFISuccessPayload) => void;
