@@ -66,7 +66,12 @@ export interface OmniFIConnection {
    */
   connectionId: string;
   institutionId: string;
-  customerType: "personal" | "business";
+  /**
+   * Optional — the widget can emit the `connection-linked` event before
+   * `customerType` is resolved. Matches `OmniFILinkedConnection.customerType`
+   * in `omni-fi-link/packages/shared`.
+   */
+  customerType?: "personal" | "business";
   /**
    * Account IDs the end-user explicitly permitted the client to access.
    * Present for B2C flows where the user selects accounts in the widget.
