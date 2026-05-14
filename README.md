@@ -183,61 +183,27 @@ The same signing secret from your registered `WebhookEndpoint` is used to sign t
 | `onSuccess`   | `(payload: OmniFISuccessPayload) => void`     | Yes      | Called once all connections are complete. `payload.connections` is an array of `{ publicToken, connectionId, institutionId, customerType }`. `connectionId` is the persisted Connection's UUID — addressable via the connection-scoped REST endpoints; `publicToken` is the opaque token you exchange server-side. |
 | `onError`     | `(error: OmniFIError) => void`                | No       | Called when the widget reports an error. |
 | `onExit`      | `() => void`                                  | No       | Called when the user closes the widget without completing. |
-| `onEvent`     | `(eventName: string, metadata?: Record<string, unknown>) => void` | No       | Called for intermediate events (e.g., `omni-fi:connection-linked` per bank linked, `omni-fi:mfa-challenge` when the institution requests an OTP). |
+| `onEvent`     | `(eventName: string, metadata?: Record<string, unknown>) => void` | No       | Called for intermediate events (e.g., `omni-fi:connection-linked` per bank linked). |
 | `displayMode` | `'iframe' \| 'popup'`                         | No       | Defaults to `iframe`.                      |
 | `environment` | `'production' \| 'staging' \| 'local'`        | No       | Defaults to `production`.                  |
 | `scriptUrl`   | `string`                                      | No       | Override the CDN script URL. For clients that need to pin to a specific hosted version. |
 
 ---
 
-## MFA delivery metadata (`beta`)
+## MFA handling
 
-When an institution requires multi-factor authentication, the widget emits the
-`omni-fi:mfa-challenge` intermediate event (`OMNIFI_EVENTS.MFA_CHALLENGE`). The
-event metadata is typed as `OmniFIMfaChallengePayload`:
+The hosted widget handles multi-factor authentication **internally** — when an
+institution requests an OTP, the widget renders its own OTP screen, collects
+the code, submits it, and (on success) advances to Account-Select transparently
+from the SDK consumer's perspective. There is **no** `omni-fi:mfa-challenge`
+event today, so subscribing to one via `onEvent` would never fire.
 
-| Field                | Type                                   | Notes                                                                                          |
-| -------------------- | -------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| `institutionId`      | `string`                               | The institution this challenge belongs to.                                                     |
-| `mfaType`            | `'sms' \| 'email' \| 'totp'`           | The challenge variant detected at login. The event only fires when MFA is actually required, so `'none'` is intentionally excluded here (use the wider `OmniFIMfaType` union for institution-level fields where `'none'` is valid). There is intentionally no separate `mfaRequired` boolean — the event firing **is** the signal. |
-| `mfaDestination`     | `string` (optional)                    | Pre-masked recipient (e.g. `"j***@example.com"`, `"+230 5*** 1234"`). Absent for `'totp'`.      |
-| `mfaDestinationKind` | `'email' \| 'phone'` (optional)        | Recipient kind. Absent for `'totp'`.                                                           |
-| `mfaLength`          | `number` (optional)                    | Expected digit count. When the field is absent, the consumer chooses a default — typically `4` for `sms`/`email` and `6` for `totp` (RFC 6238).      |
-
-```tsx
-import {
-  useOmniFILink,
-  OMNIFI_EVENTS,
-  type OmniFIMfaChallengePayload,
-} from "@omni-fi/react-link";
-
-useOmniFILink({
-  token,
-  onSuccess: ({ connections }) => { /* ... */ },
-  onEvent(eventName, metadata) {
-    if (eventName === OMNIFI_EVENTS.MFA_CHALLENGE) {
-      const mfa = metadata as OmniFIMfaChallengePayload;
-      // `mfaType` is narrowed to 'sms' | 'email' | 'totp' here — the event
-      // never fires for institutions whose mode is 'none'.
-      console.log(`MFA needed: ${mfa.mfaType}`, mfa.mfaDestination);
-    }
-  },
-});
-```
-
-> **Beta:** The `mfaDestination`, `mfaDestinationKind`, and `mfaLength` fields,
-> and the `'totp'` variant of `mfaType`, are tagged `beta` per the upstream Fern
-> availability. They will be promoted to GA after a stabilisation release.
-
-The `mfaDestination` string is masked **at source** — the SDK does not parse,
-validate, or alter it. Treat it as an opaque display string.
-
-> **Note on the cast:** `onEvent`'s `metadata` parameter is typed as
-> `Record<string, unknown>` because a single callback handles every event the
-> widget emits. The `as OmniFIMfaChallengePayload` cast in the example is sound
-> only when `eventName === OMNIFI_EVENTS.MFA_CHALLENGE`; the SDK forwards the
-> iframe payload unchanged but does not runtime-validate it, so guard on the
-> event name first (as shown) and treat optional fields as optional.
+> **Future surface.** MFA delivery metadata (`mfaDestination`,
+> `mfaDestinationKind`, `mfaLength`) is part of the widget's internal contract
+> with the backend but is not yet surfaced as an `onEvent` callback. The SDK
+> will expose `omni-fi:mfa-challenge` (and a typed payload) in a follow-up
+> release once the widget producer side ships. The institution-level
+> `OmniFIMfaType` union is already exported for forward compatibility.
 
 ---
 
@@ -254,8 +220,8 @@ control the flow:
    `inst_mock_email` / `inst_mock_totp` map 1:1 onto the three MFA modes.
    `inst_mock` is the no-MFA institution and ignores `user_mfa`.
 
-The `omni-fi:mfa-challenge` event fires only when both inputs select an MFA
-flow (an MFA-capable institution **and** the `user_mfa` username).
+The widget handles the MFA challenge UI itself (no SDK event today); consumers
+observe the flow end-to-end via the eventual `onSuccess` callback.
 
 ### Mock institutions
 
@@ -292,9 +258,6 @@ To exercise each MFA flow end-to-end:
 5. Enter the canonical correct code for the variant (`1234` for SMS/EMAIL,
    `123456` for TOTP). Any other code returns `LOGIN_FAILED`, letting you
    exercise the wrong-code error path against the real backend.
-
-`onEvent` will fire `omni-fi:mfa-challenge` with the destination metadata above,
-letting you wire telemetry or analytics around each variant.
 
 ---
 

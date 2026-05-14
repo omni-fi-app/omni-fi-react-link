@@ -1,12 +1,13 @@
+// Strictly typed events the hosted widget emits via postMessage.
+// Order and keys mirror `packages/shared/src/index.ts` in omni-fi-link verbatim.
 export const OMNIFI_EVENTS = {
   SUCCESS: "omni-fi:success",
   ERROR: "omni-fi:error",
   EXIT: "omni-fi:exit",
   READY: "omni-fi:ready",
-  CONNECTION_LINKED: "omni-fi:connection-linked",
-  MFA_CHALLENGE: "omni-fi:mfa-challenge",
   SET_THEME: "omni-fi:set-theme",
   SET_LANGUAGE: "omni-fi:set-language",
+  CONNECTION_LINKED: "omni-fi:connection-linked",
 } as const;
 
 export type OmniFIEventType =
@@ -81,84 +82,17 @@ export interface OmniFISuccessPayload {
 export type OmniFIConnectionLinkedPayload = OmniFIConnection;
 
 /**
- * The institution-level MFA mode.
+ * Canonical lowercase MFA challenge types returned by the connect/sync engine.
+ * Mirrors `OmniFIMfaType` in `omni-fi-link/packages/shared`.
  *
- * - `'none'` — institution does not require MFA.
- * - `'sms'` — one-time code sent to a phone number.
- * - `'email'` — one-time code sent to an email address.
- * - `'totp'` — rolling code from an authenticator app (RFC 6238); rotates every 30s.
- *
- * **Single source of truth.** "Is MFA required?" is `mfaType !== 'none'`.
- * There is intentionally no separate boolean — a redundant flag would drift
- * from `mfaType` and is not part of the Omni-FI contract.
- *
- * The {@link OmniFIMfaChallengePayload} on the `omni-fi:mfa-challenge` event
- * narrows this to {@link OmniFIMfaChallengeType} (excludes `'none'`) because
- * the event only fires when MFA is actually required.
+ * The hosted widget handles the MFA challenge internally today and does **not**
+ * surface a typed `mfa-challenge` event to SDK consumers. This union is
+ * re-exported for forward compatibility and for consumers that read the
+ * institution-level field directly from the API.
  *
  * @beta This union is in beta and may gain additional variants in future releases.
  */
-export type OmniFIMfaType = "none" | "sms" | "email" | "totp";
-
-/**
- * The MFA variants that can appear on an `omni-fi:mfa-challenge` event —
- * {@link OmniFIMfaType} narrowed to exclude `'none'`. The event does not fire
- * for institutions whose `mfaType` is `'none'`, so consumers handling this
- * event do not need to guard against it.
- */
-export type OmniFIMfaChallengeType = Exclude<OmniFIMfaType, "none">;
-
-/**
- * The recipient kind for the MFA delivery target. Absent for `'totp'`.
- */
-export type OmniFIMfaDestinationKind = "email" | "phone";
-
-/**
- * Metadata payload for the {@link OMNIFI_EVENTS.MFA_CHALLENGE} event.
- *
- * Forwarded verbatim from the hosted iframe. Consumers can subscribe via
- * `onEvent` and cast `metadata` to this type when `eventName` is
- * {@link OMNIFI_EVENTS.MFA_CHALLENGE}.
- *
- * The `mfaDestination` / `mfaDestinationKind` / `mfaLength` fields are the
- * camelCase wrappers around the backend's `delivery_target` / `delivery_kind`
- * / `mfa_length` fields. The destination string is **always pre-masked at
- * source** (e.g. `"j***@example.com"`, `"+230 5*** 1234"`) and should be
- * treated as opaque — the SDK does not parse, validate, or alter it.
- *
- * For `mfaType === 'totp'` the destination fields are absent; codes come from
- * an authenticator app and rotate every 30 seconds.
- *
- * @beta These fields are in beta per upstream Fern availability.
- */
-export interface OmniFIMfaChallengePayload {
-  /**
-   * The institution this MFA challenge belongs to.
-   */
-  institutionId: string;
-  /**
-   * The challenge variant detected at login. Determines what UI the widget
-   * surfaces and which fields are populated. Narrowed to exclude `'none'`
-   * because the event only fires when MFA is actually required.
-   */
-  mfaType: OmniFIMfaChallengeType;
-  /**
-   * Pre-masked recipient string (e.g. `"j***@example.com"`, `"+230 5*** 1234"`).
-   * Absent for `mfaType: 'totp'` and may be absent for any institution that
-   * has not yet been wired to populate the field.
-   */
-  mfaDestination?: string;
-  /**
-   * Recipient kind paired with `mfaDestination`. Absent for
-   * `mfaType: 'totp'`.
-   */
-  mfaDestinationKind?: OmniFIMfaDestinationKind;
-  /**
-   * Expected digit count for the OTP. Defaults are caller-chosen when absent
-   * (typically 4 for `sms`/`email`, 6 for `totp`).
-   */
-  mfaLength?: number;
-}
+export type OmniFIMfaType = "sms" | "email" | "totp" | "none";
 
 export interface OmniFIConfig {
   token: string;
@@ -175,8 +109,7 @@ export interface OmniFIConfig {
    * **Widget / SDK version coupling.** This SDK's TypeScript types describe
    * the contract emitted by the **current** widget release. Pinning
    * `scriptUrl` to an older widget version may cause runtime payloads to
-   * omit fields the types declare as required (for example, older widgets
-   * predate `OmniFIConnection.connectionId`). Pin the SDK to a matching
+   * omit fields the types declare as required. Pin the SDK to a matching
    * version when pinning the widget — or stay on `latest` for both.
    */
   scriptUrl?: string;
