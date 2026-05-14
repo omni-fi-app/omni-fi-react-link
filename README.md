@@ -12,7 +12,7 @@ The widget runs in an **isolated hosted iframe**. Cross-Origin Resource Sharing 
 
 ```
 Your App  →  link_token  →  Widget (isolated iframe)
-Your App  ←  { connections: [{ publicToken, connectionId, institutionId, customerType }] }  ←  Widget
+Your App  ←  { connections: [{ publicToken, connectionId, institutionId, customerType? }] }  ←  Widget
 ```
 
 ---
@@ -180,7 +180,7 @@ The same signing secret from your registered `WebhookEndpoint` is used to sign t
 | Property      | Type                                   | Required | Description                                |
 | ------------- | -------------------------------------- | -------- | ------------------------------------------ |
 | `token`       | `string`                                      | Yes      | Short-lived `link_token` from your server. |
-| `onSuccess`   | `(payload: OmniFISuccessPayload) => void`     | Yes      | Called once all connections are complete. `payload.connections` is an array of `{ publicToken, connectionId, institutionId, customerType }`. `connectionId` is the persisted Connection's UUID — addressable via the connection-scoped REST endpoints; `publicToken` is the opaque token you exchange server-side. |
+| `onSuccess`   | `(payload: OmniFISuccessPayload) => void`     | Yes      | Called once all connections are complete. `payload.connections` is an array of `{ publicToken, connectionId, institutionId, customerType?, permittedAccountIds? }`. `connectionId` is the persisted Connection's UUID — addressable via the connection-scoped REST endpoints; `publicToken` is the opaque token you exchange server-side. `customerType` and `permittedAccountIds` are optional (the widget may emit `connection-linked` before either is resolved, and B2B flows auto-confirm accounts). |
 | `onError`     | `(error: OmniFIError) => void`                | No       | Called when the widget reports an error. |
 | `onExit`      | `() => void`                                  | No       | Called when the user closes the widget without completing. |
 | `onEvent`     | `(eventName: string, metadata?: Record<string, unknown>) => void` | No       | Called for intermediate events (e.g., `omni-fi:connection-linked` per bank linked). |
