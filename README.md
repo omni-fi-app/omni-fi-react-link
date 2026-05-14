@@ -8,11 +8,11 @@ Official React SDK for the [Omni-FI](https://omni-fi.co) Link widget. Provides a
 
 ## How it works
 
-The widget runs in an **isolated hosted iframe**. Cross-Origin Resource Sharing (CORS) rules prevent the parent page from reading keystrokes, ensuring raw credentials never touch your application. On success, your `onSuccess` callback receives a payload containing one or more connections — each with an opaque `publicToken` to exchange on your server for a permanent connection ID.
+The widget runs in an **isolated hosted iframe**. Cross-Origin Resource Sharing (CORS) rules prevent the parent page from reading keystrokes, ensuring raw credentials never touch your application. On success, your `onSuccess` callback receives a payload containing one or more connections — each with both a stable `connectionId` (the persisted Connection's UUID) and an opaque `publicToken` you can exchange server-side.
 
 ```
 Your App  →  link_token  →  Widget (isolated iframe)
-Your App  ←  { connections: [{ publicToken, institutionId, customerType }] }  ←  Widget
+Your App  ←  { connections: [{ publicToken, connectionId, institutionId, customerType? }] }  ←  Widget
 ```
 
 ---
@@ -43,9 +43,11 @@ function ConnectButton({ linkToken }: { linkToken: string }) {
   const { open, isReady } = useOmniFILink({
     token: linkToken,
     onSuccess({ connections }) {
-      for (const { publicToken, institutionId, customerType } of connections) {
-        // Exchange each publicToken on your server for a permanent connection_id.
-        console.log("Connected:", institutionId, customerType, publicToken);
+      for (const { publicToken, connectionId, institutionId, customerType } of connections) {
+        // `connectionId` addresses the persisted Connection record directly
+        // (e.g. PUT /connections/{id}/accounts). Exchange `publicToken` on
+        // your server for an opaque API token when needed.
+        console.log("Connected:", institutionId, customerType, connectionId, publicToken);
       }
     },
     onError(error) {
@@ -178,13 +180,84 @@ The same signing secret from your registered `WebhookEndpoint` is used to sign t
 | Property      | Type                                   | Required | Description                                |
 | ------------- | -------------------------------------- | -------- | ------------------------------------------ |
 | `token`       | `string`                                      | Yes      | Short-lived `link_token` from your server. |
-| `onSuccess`   | `(payload: OmniFISuccessPayload) => void`     | Yes      | Called once all connections are complete. `payload.connections` is an array of `{ publicToken, institutionId, customerType }`. |
+| `onSuccess`   | `(payload: OmniFISuccessPayload) => void`     | Yes      | Called once all connections are complete. `payload.connections` is an array of `{ publicToken, connectionId, institutionId, customerType?, permittedAccountIds? }`. `connectionId` is the persisted Connection's UUID — addressable via the connection-scoped REST endpoints; `publicToken` is the opaque token you exchange server-side. `customerType` and `permittedAccountIds` are optional (the widget may emit `connection-linked` before either is resolved, and B2B flows auto-confirm accounts). |
 | `onError`     | `(error: OmniFIError) => void`                | No       | Called when the widget reports an error. |
 | `onExit`      | `() => void`                                  | No       | Called when the user closes the widget without completing. |
-| `onEvent`     | `(eventName: string, metadata?) => void`      | No       | Called for intermediate events (e.g., `omni-fi:connection-linked` per bank linked). |
+| `onEvent`     | `(eventName: string, metadata?: Record<string, unknown>) => void` | No       | Called for intermediate events (e.g., `omni-fi:connection-linked` per bank linked). |
 | `displayMode` | `'iframe' \| 'popup'`                         | No       | Defaults to `iframe`.                      |
 | `environment` | `'production' \| 'staging' \| 'local'`        | No       | Defaults to `production`.                  |
 | `scriptUrl`   | `string`                                      | No       | Override the CDN script URL. For clients that need to pin to a specific hosted version. |
+
+---
+
+## MFA handling
+
+The hosted widget handles multi-factor authentication **internally** — when an
+institution requests an OTP, the widget renders its own OTP screen, collects
+the code, submits it, and (on success) advances to Account-Select transparently
+from the SDK consumer's perspective. There is **no** `omni-fi:mfa-challenge`
+event today, so subscribing to one via `onEvent` would never fire.
+
+> **Future surface.** MFA delivery metadata (`mfaDestination`,
+> `mfaDestinationKind`, `mfaLength`) is part of the widget's internal contract
+> with the backend but is not yet surfaced as an `onEvent` callback. The SDK
+> will expose `omni-fi:mfa-challenge` (and a typed payload) in a follow-up
+> release once the widget producer side ships. The institution-level
+> `OmniFIMfaType` union is already exported for forward compatibility.
+
+---
+
+## Testing in sandbox
+
+When the `link_token` is issued in `sandbox` mode, the widget exercises a fully
+self-contained flow with no live bank traffic. **Two independent inputs**
+control the flow:
+
+1. **Username** chooses the auth path — `sandbox_user` follows the happy
+   path, `user_mfa` triggers the MFA branch (when the institution supports
+   MFA).
+2. **Institution** chooses the MFA variant — `inst_mock_sms` /
+   `inst_mock_email` / `inst_mock_totp` map 1:1 onto the three MFA modes.
+   `inst_mock` is the no-MFA institution and ignores `user_mfa`.
+
+The widget handles the MFA challenge UI itself (no SDK event today); consumers
+observe the flow end-to-end via the eventual `onSuccess` callback.
+
+### Mock institutions
+
+| Institution ID     | Display name                | `mfaType` | Destination                 | Length |
+| ------------------ | --------------------------- | --------- | --------------------------- | ------ |
+| `inst_mock_sms`    | Mock SMS Bank               | `sms`     | `+230 5*** 1234`            | 4      |
+| `inst_mock_email`  | Mock Email Bank             | `email`   | `j***@example.com`          | 4      |
+| `inst_mock_totp`   | Mock Authenticator Bank     | `totp`    | _(none — authenticator app)_ | 6      |
+| `inst_mock`        | Mock Happy-Path Bank        | `none`    | _(no MFA branch)_            | —      |
+
+### Sandbox usernames
+
+| Username       | Behaviour                                                                                |
+| -------------- | ---------------------------------------------------------------------------------------- |
+| `sandbox_user` | Happy path on any institution — no MFA branch even on MFA-capable mocks.                  |
+| `user_mfa`     | Triggers the MFA branch on MFA-capable institutions (`inst_mock_sms` / `_email` / `_totp`). On `inst_mock` (`mfaType: 'none'`) it falls through to the happy path. |
+
+### Sandbox OTP codes
+
+| Code            | Branch        | Result                                   |
+| --------------- | ------------- | ---------------------------------------- |
+| `1234`          | `sms` / `email` | Accepted.                                |
+| `123456`        | `totp`        | Accepted.                                |
+| anything else   | any           | Rejected with `LOGIN_FAILED` (wrong-code path — useful for exercising error UX). |
+
+To exercise each MFA flow end-to-end:
+
+1. Issue a sandbox `link_token` from your server.
+2. Mount the widget with `useOmniFILink({ token, ... })`.
+3. Pick the MFA-capable mock bank that matches the variant you want to demo
+   (`inst_mock_sms` / `inst_mock_email` / `inst_mock_totp`).
+4. Enter `user_mfa` as the username (any password). The widget surfaces the
+   matching MFA screen.
+5. Enter the canonical correct code for the variant (`1234` for SMS/EMAIL,
+   `123456` for TOTP). Any other code returns `LOGIN_FAILED`, letting you
+   exercise the wrong-code error path against the real backend.
 
 ---
 

@@ -1,11 +1,13 @@
+// Strictly typed events the hosted widget emits via postMessage.
+// Order and keys mirror `packages/shared/src/index.ts` in omni-fi-link verbatim.
 export const OMNIFI_EVENTS = {
   SUCCESS: "omni-fi:success",
   ERROR: "omni-fi:error",
   EXIT: "omni-fi:exit",
   READY: "omni-fi:ready",
-  CONNECTION_LINKED: "omni-fi:connection-linked",
   SET_THEME: "omni-fi:set-theme",
   SET_LANGUAGE: "omni-fi:set-language",
+  CONNECTION_LINKED: "omni-fi:connection-linked",
 } as const;
 
 export type OmniFIEventType =
@@ -48,8 +50,28 @@ export interface OmniFIError {
 
 export interface OmniFIConnection {
   publicToken: string;
+  /**
+   * UUID of the persisted Connection record on the Omni-FI backend.
+   *
+   * Use this to call connection-scoped endpoints
+   * (`PUT /connections/{id}/accounts`, `GET /connections/{id}/accounts`,
+   * `DELETE /connections/{id}`) without needing to exchange the
+   * `publicToken` first.
+   *
+   * Surfaced on every connection record — both the per-bank
+   * `omni-fi:connection-linked` event and the final `onSuccess` payload —
+   * so a host backend that loses the user mid-flow (e.g. browser closed
+   * after link-connect but before Account-Select Continue) can still
+   * address the persisted connection.
+   */
+  connectionId: string;
   institutionId: string;
-  customerType: "personal" | "business";
+  /**
+   * Optional — the widget can emit the `connection-linked` event before
+   * `customerType` is resolved. Matches `OmniFILinkedConnection.customerType`
+   * in `omni-fi-link/packages/shared`.
+   */
+  customerType?: "personal" | "business";
   /**
    * Account IDs the end-user explicitly permitted the client to access.
    * Present for B2C flows where the user selects accounts in the widget.
@@ -64,6 +86,19 @@ export interface OmniFISuccessPayload {
 
 export type OmniFIConnectionLinkedPayload = OmniFIConnection;
 
+/**
+ * Canonical lowercase MFA challenge types returned by the connect/sync engine.
+ * Mirrors `OmniFIMfaType` in `omni-fi-link/packages/shared`.
+ *
+ * The hosted widget handles the MFA challenge internally today and does **not**
+ * surface a typed `mfa-challenge` event to SDK consumers. This union is
+ * re-exported for forward compatibility and for consumers that read the
+ * institution-level field directly from the API.
+ *
+ * @beta This union is in beta and may gain additional variants in future releases.
+ */
+export type OmniFIMfaType = "sms" | "email" | "totp" | "none";
+
 export interface OmniFIConfig {
   token: string;
   containerId?: string;
@@ -75,6 +110,12 @@ export interface OmniFIConfig {
    * Override the CDN URL for the Omni-FI Connect script.
    * Useful for enterprise clients that need to pin to a specific hosted version.
    * If omitted, the SDK loads the latest version from the default CDN.
+   *
+   * **Widget / SDK version coupling.** This SDK's TypeScript types describe
+   * the contract emitted by the **current** widget release. Pinning
+   * `scriptUrl` to an older widget version may cause runtime payloads to
+   * omit fields the types declare as required. Pin the SDK to a matching
+   * version when pinning the widget — or stay on `latest` for both.
    */
   scriptUrl?: string;
   onSuccess: (payload: OmniFISuccessPayload) => void;
