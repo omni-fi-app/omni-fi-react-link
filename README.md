@@ -335,25 +335,36 @@ event so your host page can record the attempt without treating the
 session as finished. The terminal-only `onError` callback does NOT
 fire for these — that's the channel reserved for "the widget gave up".
 
-Subscribe via `onEvent`:
+Subscribe via `onEvent`. The event's `metadata` arrives typed as the
+SDK's generic `Record<string, unknown>` (one signature handles every
+intermediate event), so define a payload type and narrow at the event
+guard:
 
 ```tsx
+type InlineErrorPayload = {
+  code: string;
+  message: string;
+  screen: "credentials" | "mfa" | "account_select";
+  institutionId: string | null;
+};
+
 useOmniFILink({
   token: linkToken,
   onSuccess({ connections }) { /* ... */ },
   onError(error) { /* terminal — show fallback CTA */ },
   onEvent(eventName, metadata) {
-    if (eventName === 'omni-fi:inline-error') {
-      // metadata: { code, message, screen, institutionId }
+    if (eventName === "omni-fi:inline-error" && metadata) {
+      const inline = metadata as InlineErrorPayload;
+
       Sentry.addBreadcrumb({
-        category: 'omni-fi',
-        level: 'warning',
-        data: metadata,
+        category: "omni-fi",
+        level: "warning",
+        data: inline,
       });
       // Optional analytics: attribute drop-off to the specific screen
-      analytics.track('Bank Link Inline Error', {
-        code: metadata.code,
-        screen: metadata.screen,
+      analytics.track("Bank Link Inline Error", {
+        code: inline.code,
+        screen: inline.screen,
       });
     }
   },
