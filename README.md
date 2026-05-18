@@ -176,10 +176,11 @@ for quick visual QA of the Error screen.
 ### Sandbox mode
 
 Issue a sandbox `link_token` from your server by passing `Environment: 'sandbox'`
-to `POST /link-tokens`:
+to the standard `POST /connections/link-token` endpoint described in
+[Creating a link token](#creating-a-link-token):
 
 ```bash
-POST /link-tokens
+POST /connections/link-token
 {
   "ClientUserId": "user_123",
   "RedirectOrigin": "https://your-app.com",
@@ -265,6 +266,15 @@ Accepted values: every `errorType` in the table above, plus the session
 variants (`SESSION_EXPIRED`, `SESSION_IDLE_EXPIRED`, `SESSION_REVOKED`).
 The override is sandbox-only; production tokens ignore it.
 
+> **Why the short session names?** The URL-param parser uses the widget's
+> runtime `errorType` values, which are the short forms emitted on the
+> `omni-fi:error` postMessage. The SDK's longer-form `OmniFIErrorCode` union
+> members (`SESSION_TOKEN_EXPIRED`, `SESSION_TOKEN_IDLE_EXPIRED`,
+> `SESSION_TOKEN_REVOKED`) are the HTTP API error codes returned by
+> `POST /connections/...` calls — the widget maps them to the short
+> runtime form before posting. Use the short form in the URL param; the
+> SDK union's longer forms will be aligned in a follow-up release.
+
 #### Routing errors in your host app
 
 The idiomatic shape for `onError` is a single switch that maps each
@@ -273,11 +283,26 @@ fallback CTA. The example below groups the codes by what the user
 should do about them:
 
 ```tsx
+import { useOmniFILink, type OmniFIErrorCode } from "@omni-fi/react-link";
+
+// Runtime error codes the widget emits that aren't yet in the exported
+// `OmniFIErrorCode` union — see the TypeScript note below.
+type SandboxErrorCode =
+  | "AUTH_INVALID_CREDENTIALS"
+  | "AUTH_ACCOUNT_LOCKED"
+  | "INSTITUTION_TIMEOUT"
+  | "INSTITUTION_UNAVAILABLE"
+  | "NETWORK_ERROR"
+  | "ACCOUNT_NOT_FOUND"
+  | "UI_FLOW_BROKEN";
+
+type ExtendedErrorCode = OmniFIErrorCode | SandboxErrorCode;
+
 const { open, isReady } = useOmniFILink({
   token: linkToken,
   onSuccess({ connections }) { /* exchange publicTokens server-side */ },
   onError(error) {
-    switch (error.code) {
+    switch (error.code as ExtendedErrorCode) {
       case "AUTH_INVALID_CREDENTIALS":
       case "AUTH_ACCOUNT_LOCKED":
         toast.error("We couldn't sign you in. Please check with your bank.");
@@ -299,34 +324,14 @@ const { open, isReady } = useOmniFILink({
 });
 ```
 
-> **TypeScript note.** The new error codes (`AUTH_INVALID_CREDENTIALS`,
+> **TypeScript note.** The `as ExtendedErrorCode` cast at the switch is
+> necessary because the seven codes above (`AUTH_INVALID_CREDENTIALS`,
 > `AUTH_ACCOUNT_LOCKED`, `INSTITUTION_TIMEOUT`, `INSTITUTION_UNAVAILABLE`,
 > `NETWORK_ERROR`, `ACCOUNT_NOT_FOUND`, `UI_FLOW_BROKEN`) are runtime values
 > emitted by the backend but are not yet part of the exported
 > `OmniFIErrorCode` union — that widening will land in a follow-up SDK
-> release once the backend producer side ships. Until then, declare a local
-> extended-union type and cast `error.code` at the callback boundary:
->
-> ```ts
-> import { type OmniFIErrorCode } from "@omni-fi/react-link";
->
-> type SandboxErrorCode =
->   | "AUTH_INVALID_CREDENTIALS"
->   | "AUTH_ACCOUNT_LOCKED"
->   | "INSTITUTION_TIMEOUT"
->   | "INSTITUTION_UNAVAILABLE"
->   | "NETWORK_ERROR"
->   | "ACCOUNT_NOT_FOUND"
->   | "UI_FLOW_BROKEN";
->
-> type ExtendedErrorCode = OmniFIErrorCode | SandboxErrorCode;
->
-> // …in onError:
-> switch (error.code as ExtendedErrorCode) {
->   case "AUTH_INVALID_CREDENTIALS": /* … */ break;
->   // …
-> }
-> ```
+> release once the backend producer side ships. The cast-at-boundary
+> pattern shown above is the idiomatic workaround.
 >
 > Declaration merging via `declare module '@omni-fi/react-link'` won't work
 > here — `OmniFIErrorCode` is a `type` alias rather than an `interface`, and
