@@ -199,7 +199,7 @@ Use one of the universal sandbox emails with the password `sandbox_password`:
 | Username                  | Password           | Behaviour                                                                                  |
 | ------------------------- | ------------------ | ------------------------------------------------------------------------------------------ |
 | `sandbox@example.com`     | `sandbox_password` | Happy path — no MFA branch, even on MFA-capable mocks.                                      |
-| `sandbox.mfa@example.com` | `sandbox_password` | Triggers the MFA branch on MFA-capable institutions. On `inst_mock` it falls through to happy path. |
+| `sandbox.mfa@example.com` | `sandbox_password` | Triggers the MFA branch on MFA-capable institutions (`inst_mock_sms` / `inst_mock_email` / `inst_mock_totp`). |
 
 Pair `sandbox.mfa@example.com` with one of the mock institutions to exercise a
 specific MFA variant:
@@ -207,9 +207,12 @@ specific MFA variant:
 | Institution ID      | Display name             | `mfaType` | OTP code                  | Destination                  | Length |
 | ------------------- | ------------------------ | --------- | ------------------------- | ---------------------------- | ------ |
 | `inst_mock_sms`     | Mock SMS Bank            | `sms`     | `1234`                    | `+230 5*** 1234`             | 4      |
-| `inst_mock_email`  | Mock Email Bank          | `email`   | `abcd` (case-insensitive) | `j***@example.com`           | 4      |
+| `inst_mock_email`   | Mock Email Bank          | `email`   | `abcd` (case-insensitive) | `j***@example.com`           | 4      |
 | `inst_mock_totp`    | Mock Authenticator Bank  | `totp`    | `123456`                  | _(none — authenticator app)_ | 6      |
-| `inst_mock`         | Mock Happy-Path Bank     | `none`    | _(no MFA branch)_         | —                            | —      |
+
+To exercise the no-MFA happy path on the same mocks, sign in with
+`sandbox@example.com` instead of `sandbox.mfa@example.com` — that username
+short-circuits the MFA branch on every MFA-capable mock.
 
 > Any OTP other than the canonical code returns `LOGIN_FAILED`, useful for
 > exercising the wrong-code error path against the real backend.
@@ -244,14 +247,19 @@ duplicated inline so it's discoverable on npm.
 
 #### URL-param override (visual QA)
 
-For fast visual QA without walking the credentials form, append
-`?widget_simulate_error=<TYPE>` to the link-token URL. The widget jumps
-straight to the Error screen with the chosen `errorType`:
+For fast visual QA of the Error screen without walking the credentials form,
+add `widget_simulate_error=<TYPE>` to the link-token URL's query string and
+open it directly in a browser tab. The widget jumps straight to the Error
+screen with the chosen `errorType`. The SDK constructs the iframe URL
+internally, so this override is for **direct-browser QA**, not for
+programmatic navigation in your host app:
 
-```js
-// Pop the widget straight to the "Bank temporarily unavailable" error screen
-window.location.href = `${linkUrl}?widget_simulate_error=INSTITUTION_UNAVAILABLE`;
+```text
+https://link.omni-fi.co/?token=<YOUR_LINK_TOKEN>&widget_simulate_error=INSTITUTION_UNAVAILABLE
 ```
+
+Note the `&` separator — the link-token URL already carries a `?token=…`
+query parameter, so the override appends with `&`, not `?`.
 
 Accepted values: every `errorType` in the table above, plus the session
 variants (`SESSION_EXPIRED`, `SESSION_IDLE_EXPIRED`, `SESSION_REVOKED`).
@@ -296,9 +304,35 @@ const { open, isReady } = useOmniFILink({
 > `NETWORK_ERROR`, `ACCOUNT_NOT_FOUND`, `UI_FLOW_BROKEN`) are runtime values
 > emitted by the backend but are not yet part of the exported
 > `OmniFIErrorCode` union — that widening will land in a follow-up SDK
-> release once the backend producer side ships. Until then, either widen the
-> union locally (`error.code as string`) or extend the type via declaration
-> merging if your `tsconfig` is strict.
+> release once the backend producer side ships. Until then, declare a local
+> extended-union type and cast `error.code` at the callback boundary:
+>
+> ```ts
+> import { type OmniFIErrorCode } from "@omni-fi/react-link";
+>
+> type SandboxErrorCode =
+>   | "AUTH_INVALID_CREDENTIALS"
+>   | "AUTH_ACCOUNT_LOCKED"
+>   | "INSTITUTION_TIMEOUT"
+>   | "INSTITUTION_UNAVAILABLE"
+>   | "NETWORK_ERROR"
+>   | "ACCOUNT_NOT_FOUND"
+>   | "UI_FLOW_BROKEN";
+>
+> type ExtendedErrorCode = OmniFIErrorCode | SandboxErrorCode;
+>
+> // …in onError:
+> switch (error.code as ExtendedErrorCode) {
+>   case "AUTH_INVALID_CREDENTIALS": /* … */ break;
+>   // …
+> }
+> ```
+>
+> Declaration merging via `declare module '@omni-fi/react-link'` won't work
+> here — `OmniFIErrorCode` is a `type` alias rather than an `interface`, and
+> TypeScript only supports merging on interfaces and (with caveats) modules.
+> The cast-at-boundary pattern above keeps the rest of your code fully
+> type-safe.
 
 ---
 

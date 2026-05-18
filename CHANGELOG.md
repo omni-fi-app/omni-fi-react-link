@@ -22,8 +22,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   "Testing your integration" section with three subsections (sandbox mode,
   happy path, error states). Folded the existing mock-institution and OTP
   tables into the new structure.
-- Updated the happy-path sandbox username table to reflect the email-shape
-  rollout (omni-fi-core PR #223): `sandbox_user` → `sandbox@example.com`,
+- Updated the happy-path sandbox username table to reflect the upstream
+  email-shape rollout: `sandbox_user` → `sandbox@example.com`,
   `user_mfa` → `sandbox.mfa@example.com`, both paired with `sandbox_password`.
 - Updated the `inst_mock_email` canonical OTP code to `abcd`
   (case-insensitive, alphanumeric) to match the upstream `mfa_charset`
