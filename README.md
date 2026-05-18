@@ -241,9 +241,9 @@ breadcrumbs all see the same event ordering they would in production).
 > production they hit the real bank's auth and fail like any other invalid
 > login — there is no path for a real customer to accidentally trigger them.
 
-The canonical reference for these emails lives in the Omni-FI Fern docs
-(see `sandbox.mdx` on the API documentation site); the table above is
-duplicated inline so it's discoverable on npm.
+The canonical reference for these emails lives in the [Omni-FI sandbox
+docs](https://docs.omni-fi.co/sandbox#sandbox-error-simulation); the
+table above is duplicated inline so it's discoverable on npm.
 
 #### URL-param override (visual QA)
 
