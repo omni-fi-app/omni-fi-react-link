@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   section.
 - Documented the `?widget_simulate_error=<TYPE>` URL-param override for
   visual QA of error states without walking the credentials form.
+- Documented the new `omni-fi:inline-error` event for non-terminal,
+  in-place-recoverable failures (bad credentials, wrong OTP, account
+  permissions rejection). Subscribed via the existing `onEvent`
+  callback. Terminal `onError` semantics unchanged.
 
 ### Changed
 - Restructured the README's sandbox / testing content into a single

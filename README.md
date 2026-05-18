@@ -324,6 +324,65 @@ const { open, isReady } = useOmniFILink({
 });
 ```
 
+#### Inline (non-terminal) errors — `onEvent('omni-fi:inline-error', metadata)`
+
+Some bank failures don't end the widget session — incorrect
+credentials, wrong OTP, an account-permissions rejection. The user
+can fix these in place: type the password again, re-enter the OTP,
+deselect the bad account. For these cases the widget shows an inline
+error in the form **and** fires a non-terminal `omni-fi:inline-error`
+event so your host page can record the attempt without treating the
+session as finished. The terminal-only `onError` callback does NOT
+fire for these — that's the channel reserved for "the widget gave up".
+
+Subscribe via `onEvent`:
+
+```tsx
+useOmniFILink({
+  token: linkToken,
+  onSuccess({ connections }) { /* ... */ },
+  onError(error) { /* terminal — show fallback CTA */ },
+  onEvent(eventName, metadata) {
+    if (eventName === 'omni-fi:inline-error') {
+      // metadata: { code, message, screen, institutionId }
+      Sentry.addBreadcrumb({
+        category: 'omni-fi',
+        level: 'warning',
+        data: metadata,
+      });
+      // Optional analytics: attribute drop-off to the specific screen
+      analytics.track('Bank Link Inline Error', {
+        code: metadata.code,
+        screen: metadata.screen,
+      });
+    }
+  },
+});
+```
+
+| `code` value             | Screen           | Triggered by                                                |
+| ------------------------ | ---------------- | ----------------------------------------------------------- |
+| `AUTH_INVALID_CREDENTIALS` | credentials    | Bank rejects login                                          |
+| `AUTH_ACCOUNT_LOCKED`    | credentials      | Bank reports account locked                                 |
+| `LOGIN_FAILED`           | credentials      | Generic credential rejection                                |
+| `LOGIN_SHAPE_INVALID`    | credentials      | Client-side: email / phone shape doesn't match `LoginFormat` |
+| `INSTITUTION_LOCKED`     | credentials      | Bank scraper temporarily locked institution-wide            |
+| `WRONG_OTP_CODE`         | mfa              | OTP submitted doesn't match                                  |
+| `MFA_SUBMIT_FAILED`      | mfa              | Transport / 5xx during OTP POST                              |
+| `ACCOUNT_NOT_FOUND`      | account_select   | Permissions endpoint rejects an account ID                  |
+| `TOO_MANY_ACCOUNTS_SELECTED` | account_select | Client-side: exceeds backend cap                            |
+| `PERMISSIONS_FAILED`     | account_select   | Generic permissions endpoint failure                        |
+
+`metadata.screen` is one of `'credentials'` / `'mfa'` / `'account_select'` — useful for funnel analytics. `metadata.institutionId` may be `null` if the user hasn't selected a bank yet.
+
+> **When to use `onEvent` vs `onError`.** Treat `omni-fi:error` as
+> a terminal signal — the widget will land on the Error screen
+> and the user is no longer in the connect flow. Treat
+> `omni-fi:inline-error` as a breadcrumb — the user is still in
+> the flow and may still complete the connection. A typical
+> integration captures *every* `inline-error` to Sentry/analytics
+> but only surfaces toasts on `error`.
+
 > **TypeScript note.** The `as ExtendedErrorCode` cast at the switch is
 > necessary because the seven codes above (`AUTH_INVALID_CREDENTIALS`,
 > `AUTH_ACCOUNT_LOCKED`, `INSTITUTION_TIMEOUT`, `INSTITUTION_UNAVAILABLE`,
