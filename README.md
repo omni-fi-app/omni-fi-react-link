@@ -164,6 +164,253 @@ The same signing secret from your registered `WebhookEndpoint` is used to sign t
 
 ---
 
+## Testing your integration
+
+Verifying your `onSuccess` / `onError` / `onEvent` handlers against real banks
+is slow (you'd need test credentials at every institution) and non-deterministic
+(timeouts and outages don't happen on demand). Sandbox mode gives you two
+escape hatches: **magic-email credentials** that drive deterministic happy-,
+MFA-, and error-paths through the real pipeline, and a **URL-param override**
+for quick visual QA of the Error screen.
+
+### Sandbox mode
+
+Issue a sandbox `link_token` from your server by passing `Environment: 'sandbox'`
+to the standard `POST /connections/link-token` endpoint described in
+[Creating a link token](#creating-a-link-token):
+
+```bash
+POST /connections/link-token
+{
+  "ClientUserId": "user_123",
+  "RedirectOrigin": "https://your-app.com",
+  "Environment": "sandbox"
+}
+```
+
+A sandbox-issued token causes the widget to display a "Sandbox Mode" banner
+and intercept calls to real institutions — no live bank traffic ever happens.
+The magic credentials and URL overrides below **only** work against
+sandbox-mode tokens; production tokens treat them as ordinary failed logins.
+
+### Testing the happy path
+
+Use one of the universal sandbox emails with the password `sandbox_password`:
+
+| Username                  | Password           | Behaviour                                                                                  |
+| ------------------------- | ------------------ | ------------------------------------------------------------------------------------------ |
+| `sandbox@example.com`     | `sandbox_password` | Happy path — no MFA branch, even on MFA-capable mocks.                                      |
+| `sandbox.mfa@example.com` | `sandbox_password` | Triggers the MFA branch on MFA-capable institutions (`inst_mock_sms` / `inst_mock_email` / `inst_mock_totp`). |
+
+Pair `sandbox.mfa@example.com` with one of the mock institutions to exercise a
+specific MFA variant:
+
+| Institution ID      | Display name             | `mfaType` | OTP code                  | Destination                  | Length |
+| ------------------- | ------------------------ | --------- | ------------------------- | ---------------------------- | ------ |
+| `inst_mock_sms`     | Mock SMS Bank            | `sms`     | `1234`                    | `+230 5*** 1234`             | 4      |
+| `inst_mock_email`   | Mock Email Bank          | `email`   | `abcd` (case-insensitive) | `j***@example.com`           | 4      |
+| `inst_mock_totp`    | Mock Authenticator Bank  | `totp`    | `123456`                  | _(none — authenticator app)_ | 6      |
+
+To exercise the no-MFA happy path on the same mocks, sign in with
+`sandbox@example.com` instead of `sandbox.mfa@example.com` — that username
+short-circuits the MFA branch on every MFA-capable mock.
+
+> Any OTP other than the canonical code returns `LOGIN_FAILED`, useful for
+> exercising the wrong-code error path against the real backend.
+
+### Testing error states
+
+For deterministic error-path testing, use one of the magic emails below. They
+pass sandbox authentication, then deliberately fail at a specific point in the
+connect / sync / account-select pipeline — exercising the real `omni-fi:error`
+postMessage timing end-to-end (so your loading states, retry UX, and Sentry
+breadcrumbs all see the same event ordering they would in production).
+
+| Email                                          | Password           | Triggers                          | `onError` receives             |
+| ---------------------------------------------- | ------------------ | --------------------------------- | ------------------------------ |
+| `sandbox@example.com`                          | `sandbox_password` | Successful connection             | _(no error)_                   |
+| `sandbox.mfa@example.com`                      | `sandbox_password` | MFA prompt                        | _(no error if OTP correct)_    |
+| `sandbox.invalid-credentials@example.com`      | `sandbox_password` | Bank rejects login                | `AUTH_INVALID_CREDENTIALS`     |
+| `sandbox.locked@example.com`                   | `sandbox_password` | Account locked                    | `AUTH_ACCOUNT_LOCKED`          |
+| `sandbox.timeout@example.com`                  | `sandbox_password` | Sync times out                    | `INSTITUTION_TIMEOUT`          |
+| `sandbox.unavailable@example.com`              | `sandbox_password` | Bank unavailable                  | `INSTITUTION_UNAVAILABLE`      |
+| `sandbox.network-error@example.com`            | `sandbox_password` | Scraper can't reach bank          | `NETWORK_ERROR`                |
+| `sandbox.account-not-found@example.com`        | `sandbox_password` | Account permissions reject        | `ACCOUNT_NOT_FOUND`            |
+| `sandbox.ui-flow-broken@example.com`           | `sandbox_password` | Bank flow drift                   | `UI_FLOW_BROKEN`               |
+
+> **Magic emails only work with `link_token`s issued for sandbox mode.** In
+> production they hit the real bank's auth and fail like any other invalid
+> login — there is no path for a real customer to accidentally trigger them.
+
+The canonical reference for these emails lives in the [Omni-FI sandbox
+docs](https://docs.omni-fi.co/sandbox#sandbox-error-simulation); the
+table above is duplicated inline so it's discoverable on npm.
+
+#### URL-param override (visual QA)
+
+For fast visual QA of the Error screen without walking the credentials form,
+add `widget_simulate_error=<TYPE>` to the link-token URL's query string and
+open it directly in a browser tab. The widget jumps straight to the Error
+screen with the chosen `errorType`. The SDK constructs the iframe URL
+internally, so this override is for **direct-browser QA**, not for
+programmatic navigation in your host app:
+
+```text
+https://link.omni-fi.co/?token=<YOUR_LINK_TOKEN>&widget_simulate_error=INSTITUTION_UNAVAILABLE
+```
+
+Note the `&` separator — the link-token URL already carries a `?token=…`
+query parameter, so the override appends with `&`, not `?`.
+
+Accepted values: every `errorType` in the table above, plus the session
+variants (`SESSION_EXPIRED`, `SESSION_IDLE_EXPIRED`, `SESSION_REVOKED`).
+The override is sandbox-only; production tokens ignore it.
+
+> **Why the short session names?** The URL-param parser uses the widget's
+> runtime `errorType` values, which are the short forms emitted on the
+> `omni-fi:error` postMessage. The SDK's longer-form `OmniFIErrorCode` union
+> members (`SESSION_TOKEN_EXPIRED`, `SESSION_TOKEN_IDLE_EXPIRED`,
+> `SESSION_TOKEN_REVOKED`) are the HTTP API error codes returned by
+> `POST /connections/...` calls — the widget maps them to the short
+> runtime form before posting. Use the short form in the URL param; the
+> SDK union's longer forms will be aligned in a follow-up release.
+
+#### Routing errors in your host app
+
+The idiomatic shape for `onError` is a single switch that maps each
+`errorType` to either a user-facing toast, a Sentry breadcrumb, or a
+fallback CTA. The example below groups the codes by what the user
+should do about them:
+
+```tsx
+import { useOmniFILink, type OmniFIErrorCode } from "@omni-fi/react-link";
+
+// Runtime error codes the widget emits that aren't yet in the exported
+// `OmniFIErrorCode` union — see the TypeScript note below.
+type SandboxErrorCode =
+  | "AUTH_INVALID_CREDENTIALS"
+  | "AUTH_ACCOUNT_LOCKED"
+  | "INSTITUTION_TIMEOUT"
+  | "INSTITUTION_UNAVAILABLE"
+  | "NETWORK_ERROR"
+  | "ACCOUNT_NOT_FOUND"
+  | "UI_FLOW_BROKEN";
+
+type ExtendedErrorCode = OmniFIErrorCode | SandboxErrorCode;
+
+const { open, isReady } = useOmniFILink({
+  token: linkToken,
+  onSuccess({ connections }) { /* exchange publicTokens server-side */ },
+  onError(error) {
+    switch (error.code as ExtendedErrorCode) {
+      case "AUTH_INVALID_CREDENTIALS":
+      case "AUTH_ACCOUNT_LOCKED":
+        toast.error("We couldn't sign you in. Please check with your bank.");
+        break;
+      case "INSTITUTION_TIMEOUT":
+      case "INSTITUTION_UNAVAILABLE":
+      case "NETWORK_ERROR":
+      case "UI_FLOW_BROKEN":
+        toast.warning("Your bank is unavailable right now. Try again in a few minutes.");
+        break;
+      case "ACCOUNT_NOT_FOUND":
+        toast.error("One of your accounts is no longer available. Please retry.");
+        break;
+      default:
+        Sentry.captureMessage("Omni-FI Link error", { extra: error });
+        toast.error("Something went wrong. Please try again.");
+    }
+  },
+});
+```
+
+#### Inline (non-terminal) errors — `onEvent('omni-fi:inline-error', metadata)`
+
+Some bank failures don't end the widget session — incorrect
+credentials, wrong OTP, an account-permissions rejection. The user
+can fix these in place: type the password again, re-enter the OTP,
+deselect the bad account. For these cases the widget shows an inline
+error in the form **and** fires a non-terminal `omni-fi:inline-error`
+event so your host page can record the attempt without treating the
+session as finished. The terminal-only `onError` callback does NOT
+fire for these — that's the channel reserved for "the widget gave up".
+
+Subscribe via `onEvent`. The event's `metadata` arrives typed as the
+SDK's generic `Record<string, unknown>` (one signature handles every
+intermediate event), so define a payload type and narrow at the event
+guard:
+
+```tsx
+type InlineErrorPayload = {
+  code: string;
+  message: string;
+  screen: "credentials" | "mfa" | "account_select";
+  institutionId: string | null;
+};
+
+useOmniFILink({
+  token: linkToken,
+  onSuccess({ connections }) { /* ... */ },
+  onError(error) { /* terminal — show fallback CTA */ },
+  onEvent(eventName, metadata) {
+    if (eventName === "omni-fi:inline-error" && metadata) {
+      const inline = metadata as InlineErrorPayload;
+
+      Sentry.addBreadcrumb({
+        category: "omni-fi",
+        level: "warning",
+        data: inline,
+      });
+      // Optional analytics: attribute drop-off to the specific screen
+      analytics.track("Bank Link Inline Error", {
+        code: inline.code,
+        screen: inline.screen,
+      });
+    }
+  },
+});
+```
+
+| `code` value             | Screen           | Triggered by                                                |
+| ------------------------ | ---------------- | ----------------------------------------------------------- |
+| `AUTH_INVALID_CREDENTIALS` | credentials    | Bank rejects login                                          |
+| `AUTH_ACCOUNT_LOCKED`    | credentials      | Bank reports account locked                                 |
+| `LOGIN_FAILED`           | credentials      | Generic credential rejection                                |
+| `LOGIN_SHAPE_INVALID`    | credentials      | Client-side: email / phone shape doesn't match `LoginFormat` |
+| `INSTITUTION_LOCKED`     | credentials      | Bank scraper temporarily locked institution-wide            |
+| `WRONG_OTP_CODE`         | mfa              | OTP submitted doesn't match                                  |
+| `MFA_SUBMIT_FAILED`      | mfa              | Transport / 5xx during OTP POST                              |
+| `ACCOUNT_NOT_FOUND`      | account_select   | Permissions endpoint rejects an account ID                  |
+| `TOO_MANY_ACCOUNTS_SELECTED` | account_select | Client-side: exceeds backend cap                            |
+| `PERMISSIONS_FAILED`     | account_select   | Generic permissions endpoint failure                        |
+
+`metadata.screen` is one of `'credentials'` / `'mfa'` / `'account_select'` — useful for funnel analytics. `metadata.institutionId` may be `null` if the user hasn't selected a bank yet.
+
+> **When to use `onEvent` vs `onError`.** Treat `omni-fi:error` as
+> a terminal signal — the widget will land on the Error screen
+> and the user is no longer in the connect flow. Treat
+> `omni-fi:inline-error` as a breadcrumb — the user is still in
+> the flow and may still complete the connection. A typical
+> integration captures *every* `inline-error` to Sentry/analytics
+> but only surfaces toasts on `error`.
+
+> **TypeScript note.** The `as ExtendedErrorCode` cast at the switch is
+> necessary because the seven codes above (`AUTH_INVALID_CREDENTIALS`,
+> `AUTH_ACCOUNT_LOCKED`, `INSTITUTION_TIMEOUT`, `INSTITUTION_UNAVAILABLE`,
+> `NETWORK_ERROR`, `ACCOUNT_NOT_FOUND`, `UI_FLOW_BROKEN`) are runtime values
+> emitted by the backend but are not yet part of the exported
+> `OmniFIErrorCode` union — that widening will land in a follow-up SDK
+> release once the backend producer side ships. The cast-at-boundary
+> pattern shown above is the idiomatic workaround.
+>
+> Declaration merging via `declare module '@omni-fi/react-link'` won't work
+> here — `OmniFIErrorCode` is a `type` alias rather than an `interface`, and
+> TypeScript only supports merging on interfaces and (with caveats) modules.
+> The cast-at-boundary pattern above keeps the rest of your code fully
+> type-safe.
+
+---
+
 ## API
 
 ### `useOmniFILink(config: OmniFIConfig)`
@@ -204,60 +451,6 @@ event today, so subscribing to one via `onEvent` would never fire.
 > will expose `omni-fi:mfa-challenge` (and a typed payload) in a follow-up
 > release once the widget producer side ships. The institution-level
 > `OmniFIMfaType` union is already exported for forward compatibility.
-
----
-
-## Testing in sandbox
-
-When the `link_token` is issued in `sandbox` mode, the widget exercises a fully
-self-contained flow with no live bank traffic. **Two independent inputs**
-control the flow:
-
-1. **Username** chooses the auth path — `sandbox_user` follows the happy
-   path, `user_mfa` triggers the MFA branch (when the institution supports
-   MFA).
-2. **Institution** chooses the MFA variant — `inst_mock_sms` /
-   `inst_mock_email` / `inst_mock_totp` map 1:1 onto the three MFA modes.
-   `inst_mock` is the no-MFA institution and ignores `user_mfa`.
-
-The widget handles the MFA challenge UI itself (no SDK event today); consumers
-observe the flow end-to-end via the eventual `onSuccess` callback.
-
-### Mock institutions
-
-| Institution ID     | Display name                | `mfaType` | Destination                 | Length |
-| ------------------ | --------------------------- | --------- | --------------------------- | ------ |
-| `inst_mock_sms`    | Mock SMS Bank               | `sms`     | `+230 5*** 1234`            | 4      |
-| `inst_mock_email`  | Mock Email Bank             | `email`   | `j***@example.com`          | 4      |
-| `inst_mock_totp`   | Mock Authenticator Bank     | `totp`    | _(none — authenticator app)_ | 6      |
-| `inst_mock`        | Mock Happy-Path Bank        | `none`    | _(no MFA branch)_            | —      |
-
-### Sandbox usernames
-
-| Username       | Behaviour                                                                                |
-| -------------- | ---------------------------------------------------------------------------------------- |
-| `sandbox_user` | Happy path on any institution — no MFA branch even on MFA-capable mocks.                  |
-| `user_mfa`     | Triggers the MFA branch on MFA-capable institutions (`inst_mock_sms` / `_email` / `_totp`). On `inst_mock` (`mfaType: 'none'`) it falls through to the happy path. |
-
-### Sandbox OTP codes
-
-| Code            | Branch        | Result                                   |
-| --------------- | ------------- | ---------------------------------------- |
-| `1234`          | `sms` / `email` | Accepted.                                |
-| `123456`        | `totp`        | Accepted.                                |
-| anything else   | any           | Rejected with `LOGIN_FAILED` (wrong-code path — useful for exercising error UX). |
-
-To exercise each MFA flow end-to-end:
-
-1. Issue a sandbox `link_token` from your server.
-2. Mount the widget with `useOmniFILink({ token, ... })`.
-3. Pick the MFA-capable mock bank that matches the variant you want to demo
-   (`inst_mock_sms` / `inst_mock_email` / `inst_mock_totp`).
-4. Enter `user_mfa` as the username (any password). The widget surfaces the
-   matching MFA screen.
-5. Enter the canonical correct code for the variant (`1234` for SMS/EMAIL,
-   `123456` for TOTP). Any other code returns `LOGIN_FAILED`, letting you
-   exercise the wrong-code error path against the real backend.
 
 ---
 
