@@ -20,6 +20,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   in-place-recoverable failures (bad credentials, wrong OTP, account
   permissions rejection). Subscribed via the existing `onEvent`
   callback. Terminal `onError` semantics unchanged.
+- Documented that the widget's Resend control on the MFA screen is now
+  a real backend call with a server-driven cooldown (per omni-fi-core's
+  resend / watermark contract). SDK consumers see no new public surface;
+  the change is widget-internal and observable only in sandbox QA.
 
 ### Changed
 - Restructured the README's sandbox / testing content into a single

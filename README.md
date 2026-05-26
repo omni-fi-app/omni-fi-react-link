@@ -218,6 +218,23 @@ short-circuits the MFA branch on every MFA-capable mock.
 > Any OTP other than the canonical code returns `LOGIN_FAILED`, useful for
 > exercising the wrong-code error path against the real backend.
 
+#### Resend
+
+The Resend button on the widget's MFA screen is a real
+`POST /sync/{jobId}/resend` call, not a cosmetic countdown — clicking it
+actually fires a fresh OTP dispatch against the institution and bumps a
+server-side resend counter (capped at 3 per challenge). The countdown
+duration the widget displays is sourced from the live job's
+`MfaResendCooldownSeconds` field, not hardcoded.
+
+In sandbox, the mock institutions (`inst_mock_sms` / `inst_mock_email`)
+participate in the resend bookkeeping without dispatching anything new —
+the mock will keep accepting the same canonical OTP code (`1234` / `abcd`)
+across resends, so you can exercise "wait near cooldown, click Resend, get
+a fresh window" end-to-end against the real backend timing. TOTP
+(`inst_mock_totp`) has no Resend control — RFC 6238 codes rotate on a
+fixed 30s window, so the widget hides the button.
+
 ### Testing error states
 
 For deterministic error-path testing, use one of the magic emails below. They
