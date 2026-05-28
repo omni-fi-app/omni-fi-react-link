@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { getScriptUrl } from "./scriptUrl";
+import { getScriptUrl, getLoaderEnvironment } from "./scriptUrl";
 
 /**
  * RED-phase tests for the env → CDN URL lookup.
@@ -45,5 +45,31 @@ describe("getScriptUrl", () => {
     expect(getScriptUrl("development").startsWith("http://localhost")).toBe(
       true,
     );
+  });
+});
+
+/**
+ * RED-phase tests for the env → widget-loader-env mapping.
+ *
+ * Drives the `getLoaderEnvironment` helper that `useOmniFILink` uses to
+ * translate the SDK's `env` field into the `environment` signal the widget
+ * loader (`omni-fi-link/packages/link-loader`) reads to pick its iframe
+ * origin.
+ */
+describe("getLoaderEnvironment", () => {
+  test("defaults to 'production' when called with no argument", () => {
+    expect(getLoaderEnvironment()).toBe("production");
+  });
+
+  test("maps 'development' → 'local' (legacy value name)", () => {
+    expect(getLoaderEnvironment("development")).toBe("local");
+  });
+
+  test("maps 'staging' → 'staging' (verbatim)", () => {
+    expect(getLoaderEnvironment("staging")).toBe("staging");
+  });
+
+  test("maps 'production' → 'production' (verbatim)", () => {
+    expect(getLoaderEnvironment("production")).toBe("production");
   });
 });
