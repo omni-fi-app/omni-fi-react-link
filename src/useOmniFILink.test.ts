@@ -284,4 +284,97 @@ describe("useOmniFILink Hook", () => {
     );
     expect(stagingScript).toBeNull();
   });
+
+  // ---------------------------------------------------------------------------
+  // env → widget-loader `environment` derivation at the connect() boundary
+  //
+  // The widget loader reads `cfg.environment` to pick its iframe origin.
+  // useOmniFILink derives it from the SDK's public `env` field so consumers
+  // only set one thing.
+  // ---------------------------------------------------------------------------
+
+  test("env: 'staging' forwards environment='staging' to window.OmniFI.connect", () => {
+    let capturedConfig: { environment?: string } | null = null;
+    window.OmniFI = {
+      connect: mock((cfg: { environment?: string }) => {
+        capturedConfig = cfg;
+        return {
+          destroy: mock(() => {}),
+          setTheme: mock(() => {}),
+          setLanguage: mock(() => {}),
+        };
+      }),
+    };
+
+    const { result } = renderHook(() =>
+      useOmniFILink({
+        token: "link-staging",
+        env: "staging",
+        onSuccess: mock(() => {}),
+      }),
+    );
+
+    act(() => {
+      result.current.open();
+    });
+
+    expect(capturedConfig).not.toBeNull();
+    expect(capturedConfig!.environment).toBe("staging");
+  });
+
+  test("env: 'development' forwards environment='local' (loader's value name) to connect", () => {
+    let capturedConfig: { environment?: string } | null = null;
+    window.OmniFI = {
+      connect: mock((cfg: { environment?: string }) => {
+        capturedConfig = cfg;
+        return {
+          destroy: mock(() => {}),
+          setTheme: mock(() => {}),
+          setLanguage: mock(() => {}),
+        };
+      }),
+    };
+
+    const { result } = renderHook(() =>
+      useOmniFILink({
+        token: "link-dev",
+        env: "development",
+        onSuccess: mock(() => {}),
+      }),
+    );
+
+    act(() => {
+      result.current.open();
+    });
+
+    expect(capturedConfig!.environment).toBe("local");
+  });
+
+  test("env: 'production' (default) forwards environment='production' to connect", () => {
+    let capturedConfig: { environment?: string } | null = null;
+    window.OmniFI = {
+      connect: mock((cfg: { environment?: string }) => {
+        capturedConfig = cfg;
+        return {
+          destroy: mock(() => {}),
+          setTheme: mock(() => {}),
+          setLanguage: mock(() => {}),
+        };
+      }),
+    };
+
+    const { result } = renderHook(() =>
+      useOmniFILink({
+        token: "link-prod",
+        // env omitted — should default to 'production'
+        onSuccess: mock(() => {}),
+      }),
+    );
+
+    act(() => {
+      result.current.open();
+    });
+
+    expect(capturedConfig!.environment).toBe("production");
+  });
 });

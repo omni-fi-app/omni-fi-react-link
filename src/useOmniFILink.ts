@@ -5,7 +5,7 @@ import {
   type OmniFITheme,
   type OmniFILanguage,
 } from "./types";
-import { getScriptUrl } from "./lib/scriptUrl";
+import { getScriptUrl, getLoaderEnvironment } from "./lib/scriptUrl";
 
 interface UseOmniFILinkResult {
   /**
@@ -106,8 +106,14 @@ export function useOmniFILink(config: OmniFIConfig): UseOmniFILinkResult {
     // Destroy any existing widget instance before opening a new one
     instanceRef.current?.destroy();
 
-    // Capture the instance so we can interact with it later
-    instanceRef.current = window.OmniFI.connect(configRef.current);
+    // The widget loader (omni-fi-link/packages/link-loader) reads
+    // `environment` ("local" | "staging" | "production") to pick its
+    // iframe origin. Derive it from the SDK's public `env` field so the
+    // loader sees the same env signal the SDK used for the CDN URL.
+    instanceRef.current = window.OmniFI.connect({
+      ...configRef.current,
+      environment: getLoaderEnvironment(configRef.current.env),
+    });
   }, []);
 
   const setTheme = useCallback((theme: OmniFITheme) => {

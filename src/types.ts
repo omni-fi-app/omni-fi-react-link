@@ -118,12 +118,13 @@ export interface OmniFIConfig {
   token: string;
   containerId?: string;
   displayMode?: "iframe" | "popup";
-  environment?: "local" | "staging" | "production";
   theme?: OmniFITheme;
   language?: OmniFILanguage;
   /**
-   * Deployment environment the SDK should target. Controls which CDN URL the
-   * loader script is fetched from. Defaults to `"production"`.
+   * Deployment environment the SDK should target. Single source of truth
+   * for env signalling — drives both the CDN URL the loader script is
+   * fetched from AND the env signal the widget iframe runtime receives.
+   * Defaults to `"production"`.
    *
    * Use this in preference to `scriptUrl` — host integrations targeting
    * staging only need to set `env: "staging"` rather than hardcoding the URL.
@@ -163,11 +164,25 @@ export interface OmniFIInstance {
   setLanguage: (lang: OmniFILanguage) => void;
 }
 
+/**
+ * Shape of the config payload the widget loader
+ * (`omni-fi-link/packages/link-loader`) actually consumes. The loader reads
+ * `environment` (values: `"local" | "staging" | "production"`) to pick its
+ * iframe origin. `useOmniFILink` derives this from the SDK's public `env`
+ * field via `getLoaderEnvironment` and passes the augmented object to
+ * `window.OmniFI.connect()`.
+ *
+ * Module-local — not part of the SDK's public consumer-facing surface.
+ */
+interface WidgetLoaderConfig extends OmniFIConfig {
+  environment: "local" | "staging" | "production";
+}
+
 // Extend the global Window object so TypeScript knows about our injected script
 declare global {
   interface Window {
     OmniFI?: {
-      connect: (options: OmniFIConfig) => OmniFIInstance;
+      connect: (options: WidgetLoaderConfig) => OmniFIInstance;
     };
   }
 }
