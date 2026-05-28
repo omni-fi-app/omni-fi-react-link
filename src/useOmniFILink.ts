@@ -5,10 +5,7 @@ import {
   type OmniFITheme,
   type OmniFILanguage,
 } from "./types";
-
-// Default CDN URL for the Omni-FI Connect script.
-// Consumers can override this via OmniFIConfig.scriptUrl for version-pinning.
-const SCRIPT_URL = "https://cdn.omni-fi.co/v1/omni-fi-connect.js";
+import { getScriptUrl } from "./lib/scriptUrl";
 
 interface UseOmniFILinkResult {
   /**
@@ -44,7 +41,10 @@ export function useOmniFILink(config: OmniFIConfig): UseOmniFILinkResult {
   }, [config]);
 
   useEffect(() => {
-    const scriptUrl = configRef.current.scriptUrl ?? SCRIPT_URL;
+    // scriptUrl override wins over env — escape hatch for version pinning /
+    // self-hosting. env (default 'production') picks the CDN URL otherwise.
+    const scriptUrl =
+      configRef.current.scriptUrl ?? getScriptUrl(configRef.current.env);
 
     // If the script is already on the page, just mark as ready and register cleanup
     if (window.OmniFI) {

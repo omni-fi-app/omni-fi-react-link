@@ -17,6 +17,21 @@ export type OmniFITheme = "light" | "dark" | "system";
 
 export type OmniFILanguage = "en-GB" | "fr";
 
+/**
+ * Deployment environment the SDK should target. Switches the CDN URL the
+ * loader script is fetched from, so host integrations don't have to
+ * hardcode the staging URL.
+ *
+ * - `"production"` (default) — `cdn.omni-fi.co/v1/omni-fi-connect.js`
+ * - `"staging"` — `staging-cdn.omni-fi.co/v1/omni-fi-connect.js`
+ * - `"development"` — `http://localhost:5173/omni-fi-connect.js` (expects a
+ *   local Vite dev server serving the widget bundle)
+ *
+ * For advanced version-pinning (e.g. `/v2/`) or self-hosting, the
+ * `scriptUrl` override on {@link OmniFIConfig} takes precedence.
+ */
+export type OmniFIEnv = "development" | "staging" | "production";
+
 export type OmniFIErrorCode =
   // LinkToken errors
   | "LINK_TOKEN_INVALID"
@@ -107,9 +122,24 @@ export interface OmniFIConfig {
   theme?: OmniFITheme;
   language?: OmniFILanguage;
   /**
+   * Deployment environment the SDK should target. Controls which CDN URL the
+   * loader script is fetched from. Defaults to `"production"`.
+   *
+   * Use this in preference to `scriptUrl` — host integrations targeting
+   * staging only need to set `env: "staging"` rather than hardcoding the URL.
+   *
+   * When both `env` and `scriptUrl` are set, `scriptUrl` wins (escape hatch
+   * for version-pinning or self-hosting).
+   */
+  env?: OmniFIEnv;
+  /**
    * Override the CDN URL for the Omni-FI Connect script.
-   * Useful for enterprise clients that need to pin to a specific hosted version.
-   * If omitted, the SDK loads the latest version from the default CDN.
+   * Advanced usage: for pinning to a specific hosted version (e.g.
+   * `/v2/omni-fi-connect.js` once v2 ships) or for self-hosting under
+   * exceptional circumstances. Prefer the `env` field for normal
+   * production / staging / development switching.
+   *
+   * When both `env` and `scriptUrl` are set, `scriptUrl` takes precedence.
    *
    * **Widget / SDK version coupling.** This SDK's TypeScript types describe
    * the contract emitted by the **current** widget release. Pinning
