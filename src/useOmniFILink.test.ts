@@ -210,4 +210,224 @@ describe("useOmniFILink Hook", () => {
     expect(mockDestroy1).toHaveBeenCalledTimes(1);
     expect(mockDestroy2).toHaveBeenCalledTimes(0);
   });
+
+  // ---------------------------------------------------------------------------
+  // env field — script-URL switching
+  // ---------------------------------------------------------------------------
+
+  test("env: 'staging' injects a script tag pointing at the staging CDN", () => {
+    renderHook(() =>
+      useOmniFILink({
+        token: "link-staging-token",
+        env: "staging",
+        onSuccess: mock(() => {}),
+      }),
+    );
+
+    const script = document.querySelector<HTMLScriptElement>(
+      'script[src="https://staging-cdn.omni-fi.co/v1/omni-fi-connect.js"]',
+    );
+    expect(script).not.toBeNull();
+    expect(script?.async).toBe(true);
+  });
+
+  test("env: 'development' injects a script tag pointing at the local Vite dev server", () => {
+    renderHook(() =>
+      useOmniFILink({
+        token: "link-dev-token",
+        env: "development",
+        onSuccess: mock(() => {}),
+      }),
+    );
+
+    const script = document.querySelector<HTMLScriptElement>(
+      'script[src="http://localhost:5173/omni-fi-connect.js"]',
+    );
+    expect(script).not.toBeNull();
+  });
+
+  test("env: 'production' is the default and resolves to the production CDN", () => {
+    renderHook(() =>
+      useOmniFILink({
+        token: "link-prod-token",
+        env: "production",
+        onSuccess: mock(() => {}),
+      }),
+    );
+
+    const script = document.querySelector<HTMLScriptElement>(
+      'script[src="https://cdn.omni-fi.co/v1/omni-fi-connect.js"]',
+    );
+    expect(script).not.toBeNull();
+  });
+
+  test("explicit scriptUrl override takes precedence over env (escape hatch)", () => {
+    const customUrl = "https://custom.example.com/widget-v2.js";
+    renderHook(() =>
+      useOmniFILink({
+        token: "link-pinned-token",
+        env: "staging", // would otherwise resolve to staging-cdn
+        scriptUrl: customUrl,
+        onSuccess: mock(() => {}),
+      }),
+    );
+
+    // Custom URL was used — env was overridden.
+    const customScript = document.querySelector<HTMLScriptElement>(
+      `script[src="${customUrl}"]`,
+    );
+    expect(customScript).not.toBeNull();
+
+    // Staging URL was NOT injected (escape hatch precedence).
+    const stagingScript = document.querySelector<HTMLScriptElement>(
+      'script[src="https://staging-cdn.omni-fi.co/v1/omni-fi-connect.js"]',
+    );
+    expect(stagingScript).toBeNull();
+  });
+
+  // ---------------------------------------------------------------------------
+  // env → widget-loader `environment` derivation at the connect() boundary
+  //
+  // The widget loader reads `cfg.environment` to pick its iframe origin.
+  // useOmniFILink derives it from the SDK's public `env` field so consumers
+  // only set one thing.
+  // ---------------------------------------------------------------------------
+
+  test("env: 'staging' forwards environment='staging' to window.OmniFI.connect", () => {
+    let capturedConfig: { environment?: string } | null = null;
+    window.OmniFI = {
+      connect: mock((cfg: { environment?: string }) => {
+        capturedConfig = cfg;
+        return {
+          destroy: mock(() => {}),
+          setTheme: mock(() => {}),
+          setLanguage: mock(() => {}),
+        };
+      }),
+    };
+
+    const { result } = renderHook(() =>
+      useOmniFILink({
+        token: "link-staging",
+        env: "staging",
+        onSuccess: mock(() => {}),
+      }),
+    );
+
+    act(() => {
+      result.current.open();
+    });
+
+    expect(capturedConfig).not.toBeNull();
+    expect(capturedConfig!.environment).toBe("staging");
+  });
+
+  test("env: 'development' forwards environment='local' (loader's value name) to connect", () => {
+    let capturedConfig: { environment?: string } | null = null;
+    window.OmniFI = {
+      connect: mock((cfg: { environment?: string }) => {
+        capturedConfig = cfg;
+        return {
+          destroy: mock(() => {}),
+          setTheme: mock(() => {}),
+          setLanguage: mock(() => {}),
+        };
+      }),
+    };
+
+    const { result } = renderHook(() =>
+      useOmniFILink({
+        token: "link-dev",
+        env: "development",
+        onSuccess: mock(() => {}),
+      }),
+    );
+
+    act(() => {
+      result.current.open();
+    });
+
+    expect(capturedConfig!.environment).toBe("local");
+  });
+
+  test("env: 'production' (default) forwards environment='production' to connect", () => {
+    let capturedConfig: { environment?: string } | null = null;
+    window.OmniFI = {
+      connect: mock((cfg: { environment?: string }) => {
+        capturedConfig = cfg;
+        return {
+          destroy: mock(() => {}),
+          setTheme: mock(() => {}),
+          setLanguage: mock(() => {}),
+        };
+      }),
+    };
+
+    const { result } = renderHook(() =>
+      useOmniFILink({
+        token: "link-prod",
+        // env omitted — should default to 'production'
+        onSuccess: mock(() => {}),
+      }),
+    );
+
+    act(() => {
+      result.current.open();
+    });
+
+    expect(capturedConfig!.environment).toBe("production");
+  });
+
+  // ---------------------------------------------------------------------------
+  // env is locked at mount — post-mount changes don't drift connect() vs script
+  //
+  // Regression for Copilot PR #9 finding 3: the loader script tag is injected
+  // once on mount. If `config.env` later changes via rerender, the script on
+  // the page is still the original URL. `connect()` must use the env that was
+  // active when the script loaded, NOT the rerendered value, so the iframe
+  // origin agrees with the loaded script.
+  // ---------------------------------------------------------------------------
+
+  test("post-mount env change does NOT change the environment forwarded to connect()", () => {
+    let capturedConfig: { environment?: string } | null = null;
+    // `window.OmniFI` pre-set so the `if (window.OmniFI)` short-circuit in
+    // the mount effect fires (matches the script-already-loaded case). The
+    // hook still has to snapshot env at mount, independent of whether the
+    // script tag is freshly injected or already-on-page.
+    window.OmniFI = {
+      connect: mock((cfg: { environment?: string }) => {
+        capturedConfig = cfg;
+        return {
+          destroy: mock(() => {}),
+          setTheme: mock(() => {}),
+          setLanguage: mock(() => {}),
+        };
+      }),
+    };
+
+    // Mount with env=staging.
+    const { result, rerender } = renderHook(
+      (props: { env: "staging" | "production" }) =>
+        useOmniFILink({
+          token: "link-rerender",
+          env: props.env,
+          onSuccess: mock(() => {}),
+        }),
+      { initialProps: { env: "staging" as const } },
+    );
+
+    // Rerender with env=production. The hook MUST ignore the change for the
+    // purpose of the connect() environment so the iframe runtime env can't
+    // disagree with the script that was loaded at mount.
+    rerender({ env: "production" });
+
+    act(() => {
+      result.current.open();
+    });
+
+    // connect() received the SNAPSHOT env (staging), not the latest (production).
+    // Without the snapshot, this would be 'production' and the iframe would
+    // try to render in prod mode against whatever script was loaded at mount.
+    expect(capturedConfig!.environment).toBe("staging");
+  });
 });

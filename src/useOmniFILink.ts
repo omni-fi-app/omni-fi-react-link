@@ -5,10 +5,7 @@ import {
   type OmniFITheme,
   type OmniFILanguage,
 } from "./types";
-
-// Default CDN URL for the Omni-FI Connect script.
-// Consumers can override this via OmniFIConfig.scriptUrl for version-pinning.
-const SCRIPT_URL = "https://cdn.omni-fi.co/v1/omni-fi-connect.js";
+import { getScriptUrl, getLoaderEnvironment } from "./lib/scriptUrl";
 
 interface UseOmniFILinkResult {
   /**
@@ -38,13 +35,54 @@ export function useOmniFILink(config: OmniFIConfig): UseOmniFILinkResult {
   const configRef = useRef(config);
   // Store the active widget instance so we can call methods on it or destroy it
   const instanceRef = useRef<OmniFIInstance | null>(null);
+  // Snapshot the loader environment at first-mount script-load time. The
+  // loader script tag can only be injected once per page (a second injection
+  // would race against / shadow the first), so the `env` that drove the
+  // URL choice is fixed for the page's lifetime. Capturing it here means
+  // a subsequent rerender that changes `config.env` cannot cause
+  // `connect()` to ship a `environment:` value that disagrees with the
+  // script currently on the page. The lower-cased "loader env" form
+  // (`'local' | 'staging' | 'production'`) is what `window.OmniFI.connect()`
+  // expects; we snapshot the resolved form, not the input form.
+  const loaderEnvRef = useRef<ReturnType<typeof getLoaderEnvironment> | null>(
+    null,
+  );
 
   useEffect(() => {
+    // Help developers spot post-mount env changes that the SDK won't honour.
+    // Loader-script URL is locked at mount; changing env after won't reload
+    // the script, and we deliberately ignore the change (rather than
+    // re-injecting and tearing down an open widget). Warn once per change so
+    // host-app effects with unstable identity don't spam the console.
+    if (
+      loaderEnvRef.current !== null &&
+      configRef.current.env !== config.env
+    ) {
+      console.warn(
+        `[omni-fi/react-link] OmniFIConfig.env changed after mount (`,
+        configRef.current.env,
+        "→",
+        config.env,
+        "). The change is ignored — the loader script URL was locked at first mount. Set env once at mount time; mount the hook on a new key if you need to switch environments at runtime.",
+      );
+    }
     configRef.current = config;
   }, [config]);
 
   useEffect(() => {
-    const scriptUrl = configRef.current.scriptUrl ?? SCRIPT_URL;
+    // scriptUrl override wins over env for the URL — escape hatch for
+    // version pinning / self-hosting. env (default 'production') picks
+    // the CDN URL otherwise. The matching `environment:` value passed to
+    // `connect()` (snapshotted into loaderEnvRef below) is always derived
+    // from `env` — `scriptUrl` is URL-only, NOT a back-channel for env.
+    // Callers who set a custom staging/dev `scriptUrl` MUST also set the
+    // matching `env`; otherwise the loaded script and the widget iframe
+    // origin can disagree.
+    const scriptUrl =
+      configRef.current.scriptUrl ?? getScriptUrl(configRef.current.env);
+
+    // Lock the loader env for the rest of the page lifetime — see ref docs.
+    loaderEnvRef.current = getLoaderEnvironment(configRef.current.env);
 
     // If the script is already on the page, just mark as ready and register cleanup
     if (window.OmniFI) {
@@ -106,8 +144,18 @@ export function useOmniFILink(config: OmniFIConfig): UseOmniFILinkResult {
     // Destroy any existing widget instance before opening a new one
     instanceRef.current?.destroy();
 
-    // Capture the instance so we can interact with it later
-    instanceRef.current = window.OmniFI.connect(configRef.current);
+    // The widget loader (omni-fi-link/packages/link-loader) reads
+    // `environment` ("local" | "staging" | "production") to pick its
+    // iframe origin. Use the SNAPSHOT captured at script-load time so the
+    // iframe origin always matches the script that's on the page —
+    // changing `config.env` between mount and `open()` does not cause a
+    // mismatch. Falls back to 'production' if `open()` is somehow called
+    // before the script-load effect ran (shouldn't happen — the `isReady`
+    // guard above runs first — but the fallback keeps the type narrow).
+    instanceRef.current = window.OmniFI.connect({
+      ...configRef.current,
+      environment: loaderEnvRef.current ?? "production",
+    });
   }, []);
 
   const setTheme = useCallback((theme: OmniFITheme) => {

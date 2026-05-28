@@ -68,6 +68,81 @@ function ConnectButton({ linkToken }: { linkToken: string }) {
 
 ---
 
+## Environments
+
+Switch the CDN the SDK loads the widget script from by setting `env` on the
+`useOmniFILink` config:
+
+```tsx
+useOmniFILink({
+  token: linkToken,
+  env: "staging", // 'development' | 'staging' | 'production' (default)
+  onSuccess({ connections }) { /* … */ },
+});
+```
+
+| `env`                    | Script loaded from                                                                       |
+| ------------------------ | ---------------------------------------------------------------------------------------- |
+| `"production"` (default) | `https://cdn.omni-fi.co/v1/omni-fi-connect.js`                                            |
+| `"staging"`              | `https://staging-cdn.omni-fi.co/v1/omni-fi-connect.js`                                    |
+| `"development"`          | `http://localhost:5173/omni-fi-connect.js` (expects a local Vite dev server on port 5173) |
+
+The `/v1/` prefix is a non-breaking-upgrade path — a future `/v2/` bundle can
+ship without breaking integrations pinned to `v1`.
+
+### Advanced: pinning to a specific script URL
+
+For version-pinning (e.g. `/v2/` once available) or for self-hosting under
+exceptional circumstances, the `scriptUrl` field takes precedence over `env`
+**for the loader script URL only**:
+
+```tsx
+useOmniFILink({
+  token: linkToken,
+  env: "production",                                          // 👈 must match the script's intended env
+  scriptUrl: "https://cdn.omni-fi.co/v2/omni-fi-connect.js",
+  onSuccess({ connections }) { /* … */ },
+});
+```
+
+When both `env` and `scriptUrl` are supplied, **only the loader script URL**
+is overridden by `scriptUrl`. The `environment` value the widget iframe
+runtime receives is still derived from `env` (and still defaults to
+`"production"`). If you pin `scriptUrl` to a staging or development build,
+you **must** set the matching `env` — otherwise the loaded script and the
+iframe origin will diverge:
+
+```tsx
+// 🚫 BAD — loads staging script but iframe runs as production
+useOmniFILink({
+  token: linkToken,
+  scriptUrl: "https://staging-cdn.omni-fi.co/v1/omni-fi-connect.js",
+  // env omitted → defaults to "production" → iframe origin is connect.omni-fi.co
+  // → CDN script and iframe env disagree
+  onSuccess({ connections }) { /* … */ },
+});
+
+// ✅ GOOD — script and env both staging
+useOmniFILink({
+  token: linkToken,
+  env: "staging",
+  scriptUrl: "https://staging-cdn.omni-fi.co/v1/omni-fi-connect.js",
+  onSuccess({ connections }) { /* … */ },
+});
+```
+
+### `env` is locked at mount
+
+The loader script URL is resolved on first mount and the script tag is
+injected into the page. Subsequent rerenders that change `env` (or
+`scriptUrl`) are **ignored** — re-injecting would either race against
+the original script or tear down any open widget. A `console.warn` fires
+in development if the SDK sees `env` change post-mount. If you need to
+switch environments at runtime, mount the hook on a new React `key` so
+the whole component remounts cleanly.
+
+---
+
 ## Creating a link token
 
 The `token` prop is a short-lived `LinkToken` your server creates via the Omni-FI API before mounting the widget. It is never generated client-side.
@@ -205,11 +280,11 @@ Use one of the universal sandbox emails with the password `sandbox_password`:
 Pair `sandbox.mfa@example.com` with one of the mock institutions to exercise a
 specific MFA variant:
 
-| Institution ID      | Display name             | `mfaType` | OTP code                  | Destination                  | Length |
-| ------------------- | ------------------------ | --------- | ------------------------- | ---------------------------- | ------ |
-| `inst_mock_sms`     | Mock SMS Bank            | `sms`     | `1234`                    | `+230 5*** 1234`             | 4      |
-| `inst_mock_email`   | Mock Email Bank          | `email`   | `abcd` (case-insensitive) | `j***@example.com`           | 4      |
-| `inst_mock_totp`    | Mock Authenticator Bank  | `totp`    | `123456`                  | _(none — authenticator app)_ | 6      |
+| Institution ID      | Display name             | `mfaType` | OTP code                    | Destination                  | Length |
+| ------------------- | ------------------------ | --------- | --------------------------- | ---------------------------- | ------ |
+| `inst_mock_sms`     | Mock SMS Bank            | `sms`     | `123456`                    | `+230 5*** 1234`             | 6      |
+| `inst_mock_email`   | Mock Email Bank          | `email`   | `abcdef` (case-insensitive) | `j***@example.com`           | 6      |
+| `inst_mock_totp`    | Mock Authenticator Bank  | `totp`    | `123456`                    | _(none — authenticator app)_ | 6      |
 
 To exercise the no-MFA happy path on the same mocks, sign in with
 `sandbox@example.com` instead of `sandbox.mfa@example.com` — that username
@@ -217,6 +292,26 @@ short-circuits the MFA branch on every MFA-capable mock.
 
 > Any OTP other than the canonical code returns `LOGIN_FAILED`, useful for
 > exercising the wrong-code error path against the real backend.
+
+#### Resend
+
+The Resend button on the widget's MFA screen is a real
+`POST /sync/{jobId}/resend` call, not a cosmetic countdown — clicking
+it bumps a server-side resend counter (capped at 3 per challenge) and
+re-arms the cooldown. The countdown duration the widget displays is
+sourced from the live job's `MfaResendCooldownSeconds` field, not
+hardcoded. In **production**, the backend then triggers a fresh OTP
+dispatch against the institution.
+
+In **sandbox**, the mock institutions (`inst_mock_sms` /
+`inst_mock_email`) participate in the resend bookkeeping (counter +
+cooldown + `MfaResendRequestedAt` watermark) but no real OTP is
+dispatched — the mock keeps accepting the same canonical OTP code
+(`123456` / `abcdef`) across resends. That lets you exercise "wait near
+cooldown, click Resend, get a fresh window" end-to-end against the
+real backend timing without live bank traffic. TOTP
+(`inst_mock_totp`) has no Resend control — RFC 6238 codes rotate on a
+fixed 30s window, so the widget hides the button.
 
 ### Testing error states
 
@@ -432,8 +527,8 @@ useOmniFILink({
 | `onExit`      | `() => void`                                  | No       | Called when the user closes the widget without completing. |
 | `onEvent`     | `(eventName: string, metadata?: Record<string, unknown>) => void` | No       | Called for intermediate events (e.g., `omni-fi:connection-linked` per bank linked). |
 | `displayMode` | `'iframe' \| 'popup'`                         | No       | Defaults to `iframe`.                      |
-| `environment` | `'production' \| 'staging' \| 'local'`        | No       | Defaults to `production`.                  |
-| `scriptUrl`   | `string`                                      | No       | Override the CDN script URL. For clients that need to pin to a specific hosted version. |
+| `env`         | `'development' \| 'staging' \| 'production'`  | No       | Defaults to `production`. See [Environments](#environments) — single source of truth for both the CDN URL and the widget runtime env signal. |
+| `scriptUrl`   | `string`                                      | No       | Advanced: override the CDN script URL for version pinning or self-hosting. Takes precedence over `env` when both are set. See [Environments](#environments). |
 
 ---
 

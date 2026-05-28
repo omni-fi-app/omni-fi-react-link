@@ -17,6 +17,21 @@ export type OmniFITheme = "light" | "dark" | "system";
 
 export type OmniFILanguage = "en-GB" | "fr";
 
+/**
+ * Deployment environment the SDK should target. Switches the CDN URL the
+ * loader script is fetched from, so host integrations don't have to
+ * hardcode the staging URL.
+ *
+ * - `"production"` (default) — `cdn.omni-fi.co/v1/omni-fi-connect.js`
+ * - `"staging"` — `staging-cdn.omni-fi.co/v1/omni-fi-connect.js`
+ * - `"development"` — `http://localhost:5173/omni-fi-connect.js` (expects a
+ *   local Vite dev server serving the widget bundle)
+ *
+ * For advanced version-pinning (e.g. `/v2/`) or self-hosting, the
+ * `scriptUrl` override on {@link OmniFIConfig} takes precedence.
+ */
+export type OmniFIEnv = "development" | "staging" | "production";
+
 export type OmniFIErrorCode =
   // LinkToken errors
   | "LINK_TOKEN_INVALID"
@@ -103,13 +118,43 @@ export interface OmniFIConfig {
   token: string;
   containerId?: string;
   displayMode?: "iframe" | "popup";
-  environment?: "local" | "staging" | "production";
   theme?: OmniFITheme;
   language?: OmniFILanguage;
   /**
+   * Deployment environment the SDK should target. Single source of truth
+   * for env signalling — drives both the CDN URL the loader script is
+   * fetched from AND the `environment` value the widget iframe runtime
+   * receives via `window.OmniFI.connect()`. Defaults to `"production"`.
+   *
+   * Use this in preference to `scriptUrl` — host integrations targeting
+   * staging only need to set `env: "staging"` rather than hardcoding the URL.
+   *
+   * **Locked at mount.** The loader script URL is resolved once on first
+   * mount; subsequent rerenders that change `env` are ignored (with a
+   * `console.warn` in development builds). Mount the hook on a new key if
+   * you need to switch environments at runtime — this guarantees the
+   * loaded script and the iframe runtime env can't disagree.
+   *
+   * **Precedence with `scriptUrl`.** When both are set, `scriptUrl` wins
+   * for the loader script URL only. `env` still drives the iframe's
+   * `environment` runtime signal — see the `scriptUrl` docs.
+   */
+  env?: OmniFIEnv;
+  /**
    * Override the CDN URL for the Omni-FI Connect script.
-   * Useful for enterprise clients that need to pin to a specific hosted version.
-   * If omitted, the SDK loads the latest version from the default CDN.
+   * Advanced usage: for pinning to a specific hosted version (e.g.
+   * `/v2/omni-fi-connect.js` once v2 ships) or for self-hosting under
+   * exceptional circumstances. Prefer the `env` field for normal
+   * production / staging / development switching.
+   *
+   * **URL-only precedence.** When both `env` and `scriptUrl` are set,
+   * `scriptUrl` wins for the **loader script URL only** — the
+   * `environment` value passed to `window.OmniFI.connect()` is still
+   * derived from `env` and defaults to `"production"`. A consumer who
+   * sets a custom staging / development `scriptUrl` MUST also set the
+   * matching `env`; otherwise the loaded script and the widget iframe
+   * origin can diverge (e.g. staging script loaded but the iframe still
+   * runs in production mode).
    *
    * **Widget / SDK version coupling.** This SDK's TypeScript types describe
    * the contract emitted by the **current** widget release. Pinning
@@ -133,11 +178,25 @@ export interface OmniFIInstance {
   setLanguage: (lang: OmniFILanguage) => void;
 }
 
+/**
+ * Shape of the config payload the widget loader
+ * (`omni-fi-link/packages/link-loader`) actually consumes. The loader reads
+ * `environment` (values: `"local" | "staging" | "production"`) to pick its
+ * iframe origin. `useOmniFILink` derives this from the SDK's public `env`
+ * field via `getLoaderEnvironment` and passes the augmented object to
+ * `window.OmniFI.connect()`.
+ *
+ * Module-local — not part of the SDK's public consumer-facing surface.
+ */
+interface WidgetLoaderConfig extends OmniFIConfig {
+  environment: "local" | "staging" | "production";
+}
+
 // Extend the global Window object so TypeScript knows about our injected script
 declare global {
   interface Window {
     OmniFI?: {
-      connect: (options: OmniFIConfig) => OmniFIInstance;
+      connect: (options: WidgetLoaderConfig) => OmniFIInstance;
     };
   }
 }
