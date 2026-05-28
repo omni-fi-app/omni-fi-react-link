@@ -488,8 +488,8 @@ useOmniFILink({
 | `onExit`      | `() => void`                                  | No       | Called when the user closes the widget without completing. |
 | `onEvent`     | `(eventName: string, metadata?: Record<string, unknown>) => void` | No       | Called for intermediate events (e.g., `omni-fi:connection-linked` per bank linked). |
 | `displayMode` | `'iframe' \| 'popup'`                         | No       | Defaults to `iframe`.                      |
-| `environment` | `'production' \| 'staging' \| 'local'`        | No       | Defaults to `production`.                  |
-| `scriptUrl`   | `string`                                      | No       | Override the CDN script URL. For clients that need to pin to a specific hosted version. |
+| `env`         | `'development' \| 'staging' \| 'production'`  | No       | Defaults to `production`. See [Environments](#environments) — single source of truth for both the CDN URL and the widget runtime env signal. |
+| `scriptUrl`   | `string`                                      | No       | Advanced: override the CDN script URL for version pinning or self-hosting. Takes precedence over `env` when both are set. See [Environments](#environments). |
 
 ---
 

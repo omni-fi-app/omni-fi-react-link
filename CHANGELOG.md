@@ -9,10 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - `env` field on `useOmniFILink` config (`'development' | 'staging' | 'production'`,
-  default `'production'`) — switches the CDN URL the SDK loads. Mirrors the
-  pattern used by the vanilla JS `link-loader` and removes the need for host
-  integrations targeting staging to hardcode the CDN URL. Exported alongside
-  the `OmniFIEnv` type and the underlying `getScriptUrl(env)` helper.
+  default `'production'`). Single source of truth for env signalling — drives
+  both the SDK loader-script CDN URL **and** the env signal forwarded to the
+  widget iframe runtime (the loader's `environment` field is derived from
+  `env` internally). Replaces the previous `environment` field; consumers
+  only need to set one thing. Exported alongside the `OmniFIEnv` type and
+  the underlying `getScriptUrl(env)` helper.
 - Documented sandbox magic-email credentials for error-screen testing
   (`sandbox.invalid-credentials@example.com`, `sandbox.locked@example.com`,
   `sandbox.timeout@example.com`, `sandbox.unavailable@example.com`,
