@@ -47,6 +47,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated the happy-path sandbox username table to reflect the upstream
   email-shape rollout: `sandbox_user` → `sandbox@example.com`,
   `user_mfa` → `sandbox.mfa@example.com`, both paired with `sandbox_password`.
-- Updated the `inst_mock_email` canonical OTP code to `abcd`
-  (case-insensitive, alphanumeric) to match the upstream `mfa_charset`
-  redesign. SMS / TOTP codes unchanged (`1234` / `123456`).
+- Updated the `inst_mock_email` canonical OTP code to `abcdef`
+  (case-insensitive, alphanumeric, 6 chars) to match the upstream
+  `mfa_charset` redesign. SMS code aligned to `123456` (numeric, 6 chars
+  — was `1234` in earlier sandbox iterations). TOTP code unchanged
+  (`123456`, 6 chars). All three canonical codes are now 6 characters
+  long, matching the dominant real-bank OTP shape.

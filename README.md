@@ -244,11 +244,11 @@ Use one of the universal sandbox emails with the password `sandbox_password`:
 Pair `sandbox.mfa@example.com` with one of the mock institutions to exercise a
 specific MFA variant:
 
-| Institution ID      | Display name             | `mfaType` | OTP code                  | Destination                  | Length |
-| ------------------- | ------------------------ | --------- | ------------------------- | ---------------------------- | ------ |
-| `inst_mock_sms`     | Mock SMS Bank            | `sms`     | `1234`                    | `+230 5*** 1234`             | 4      |
-| `inst_mock_email`   | Mock Email Bank          | `email`   | `abcd` (case-insensitive) | `j***@example.com`           | 4      |
-| `inst_mock_totp`    | Mock Authenticator Bank  | `totp`    | `123456`                  | _(none — authenticator app)_ | 6      |
+| Institution ID      | Display name             | `mfaType` | OTP code                    | Destination                  | Length |
+| ------------------- | ------------------------ | --------- | --------------------------- | ---------------------------- | ------ |
+| `inst_mock_sms`     | Mock SMS Bank            | `sms`     | `123456`                    | `+230 5*** 1234`             | 6      |
+| `inst_mock_email`   | Mock Email Bank          | `email`   | `abcdef` (case-insensitive) | `j***@example.com`           | 6      |
+| `inst_mock_totp`    | Mock Authenticator Bank  | `totp`    | `123456`                    | _(none — authenticator app)_ | 6      |
 
 To exercise the no-MFA happy path on the same mocks, sign in with
 `sandbox@example.com` instead of `sandbox.mfa@example.com` — that username
@@ -271,7 +271,7 @@ In **sandbox**, the mock institutions (`inst_mock_sms` /
 `inst_mock_email`) participate in the resend bookkeeping (counter +
 cooldown + `MfaResendRequestedAt` watermark) but no real OTP is
 dispatched — the mock keeps accepting the same canonical OTP code
-(`1234` / `abcd`) across resends. That lets you exercise "wait near
+(`123456` / `abcdef`) across resends. That lets you exercise "wait near
 cooldown, click Resend, get a fresh window" end-to-end against the
 real backend timing without live bank traffic. TOTP
 (`inst_mock_totp`) has no Resend control — RFC 6238 codes rotate on a
