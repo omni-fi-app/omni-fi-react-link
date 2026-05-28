@@ -27,10 +27,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   in-place-recoverable failures (bad credentials, wrong OTP, account
   permissions rejection). Subscribed via the existing `onEvent`
   callback. Terminal `onError` semantics unchanged.
-- Documented that the widget's Resend control on the MFA screen is now
-  a real backend call with a server-driven cooldown (per omni-fi-core's
-  resend / watermark contract). SDK consumers see no new public surface;
-  the change is widget-internal and observable only in sandbox QA.
+- Documented the widget's Resend control on the MFA screen: it makes a
+  real `POST /sync/{jobId}/resend` backend call with a server-driven
+  cooldown (per omni-fi-core's resend / watermark contract), bumps a
+  per-challenge resend counter, and — in production — triggers a fresh
+  OTP dispatch against the institution. SDK consumers see no new public
+  surface; the README documents how to exercise the timing in sandbox
+  (where the mocks participate in the bookkeeping without dispatching
+  any real OTP).
 
 ### Changed
 - The `scriptUrl` override remains an escape hatch (version pinning, self-hosting)
