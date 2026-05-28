@@ -93,17 +93,53 @@ ship without breaking integrations pinned to `v1`.
 ### Advanced: pinning to a specific script URL
 
 For version-pinning (e.g. `/v2/` once available) or for self-hosting under
-exceptional circumstances, the `scriptUrl` field takes precedence over `env`:
+exceptional circumstances, the `scriptUrl` field takes precedence over `env`
+**for the loader script URL only**:
 
 ```tsx
 useOmniFILink({
   token: linkToken,
+  env: "production",                                          // 👈 must match the script's intended env
   scriptUrl: "https://cdn.omni-fi.co/v2/omni-fi-connect.js",
   onSuccess({ connections }) { /* … */ },
 });
 ```
 
-When both `env` and `scriptUrl` are supplied, `scriptUrl` wins.
+When both `env` and `scriptUrl` are supplied, **only the loader script URL**
+is overridden by `scriptUrl`. The `environment` value the widget iframe
+runtime receives is still derived from `env` (and still defaults to
+`"production"`). If you pin `scriptUrl` to a staging or development build,
+you **must** set the matching `env` — otherwise the loaded script and the
+iframe origin will diverge:
+
+```tsx
+// 🚫 BAD — loads staging script but iframe runs as production
+useOmniFILink({
+  token: linkToken,
+  scriptUrl: "https://staging-cdn.omni-fi.co/v1/omni-fi-connect.js",
+  // env omitted → defaults to "production" → iframe origin is connect.omni-fi.co
+  // → CDN script and iframe env disagree
+  onSuccess({ connections }) { /* … */ },
+});
+
+// ✅ GOOD — script and env both staging
+useOmniFILink({
+  token: linkToken,
+  env: "staging",
+  scriptUrl: "https://staging-cdn.omni-fi.co/v1/omni-fi-connect.js",
+  onSuccess({ connections }) { /* … */ },
+});
+```
+
+### `env` is locked at mount
+
+The loader script URL is resolved on first mount and the script tag is
+injected into the page. Subsequent rerenders that change `env` (or
+`scriptUrl`) are **ignored** — re-injecting would either race against
+the original script or tear down any open widget. A `console.warn` fires
+in development if the SDK sees `env` change post-mount. If you need to
+switch environments at runtime, mount the hook on a new React `key` so
+the whole component remounts cleanly.
 
 ---
 

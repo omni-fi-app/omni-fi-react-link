@@ -377,4 +377,57 @@ describe("useOmniFILink Hook", () => {
 
     expect(capturedConfig!.environment).toBe("production");
   });
+
+  // ---------------------------------------------------------------------------
+  // env is locked at mount — post-mount changes don't drift connect() vs script
+  //
+  // Regression for Copilot PR #9 finding 3: the loader script tag is injected
+  // once on mount. If `config.env` later changes via rerender, the script on
+  // the page is still the original URL. `connect()` must use the env that was
+  // active when the script loaded, NOT the rerendered value, so the iframe
+  // origin agrees with the loaded script.
+  // ---------------------------------------------------------------------------
+
+  test("post-mount env change does NOT change the environment forwarded to connect()", () => {
+    let capturedConfig: { environment?: string } | null = null;
+    // `window.OmniFI` pre-set so the `if (window.OmniFI)` short-circuit in
+    // the mount effect fires (matches the script-already-loaded case). The
+    // hook still has to snapshot env at mount, independent of whether the
+    // script tag is freshly injected or already-on-page.
+    window.OmniFI = {
+      connect: mock((cfg: { environment?: string }) => {
+        capturedConfig = cfg;
+        return {
+          destroy: mock(() => {}),
+          setTheme: mock(() => {}),
+          setLanguage: mock(() => {}),
+        };
+      }),
+    };
+
+    // Mount with env=staging.
+    const { result, rerender } = renderHook(
+      (props: { env: "staging" | "production" }) =>
+        useOmniFILink({
+          token: "link-rerender",
+          env: props.env,
+          onSuccess: mock(() => {}),
+        }),
+      { initialProps: { env: "staging" as const } },
+    );
+
+    // Rerender with env=production. The hook MUST ignore the change for the
+    // purpose of the connect() environment so the iframe runtime env can't
+    // disagree with the script that was loaded at mount.
+    rerender({ env: "production" });
+
+    act(() => {
+      result.current.open();
+    });
+
+    // connect() received the SNAPSHOT env (staging), not the latest (production).
+    // Without the snapshot, this would be 'production' and the iframe would
+    // try to render in prod mode against whatever script was loaded at mount.
+    expect(capturedConfig!.environment).toBe("staging");
+  });
 });

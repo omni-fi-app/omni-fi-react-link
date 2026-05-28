@@ -123,14 +123,21 @@ export interface OmniFIConfig {
   /**
    * Deployment environment the SDK should target. Single source of truth
    * for env signalling — drives both the CDN URL the loader script is
-   * fetched from AND the env signal the widget iframe runtime receives.
-   * Defaults to `"production"`.
+   * fetched from AND the `environment` value the widget iframe runtime
+   * receives via `window.OmniFI.connect()`. Defaults to `"production"`.
    *
    * Use this in preference to `scriptUrl` — host integrations targeting
    * staging only need to set `env: "staging"` rather than hardcoding the URL.
    *
-   * When both `env` and `scriptUrl` are set, `scriptUrl` wins (escape hatch
-   * for version-pinning or self-hosting).
+   * **Locked at mount.** The loader script URL is resolved once on first
+   * mount; subsequent rerenders that change `env` are ignored (with a
+   * `console.warn` in development builds). Mount the hook on a new key if
+   * you need to switch environments at runtime — this guarantees the
+   * loaded script and the iframe runtime env can't disagree.
+   *
+   * **Precedence with `scriptUrl`.** When both are set, `scriptUrl` wins
+   * for the loader script URL only. `env` still drives the iframe's
+   * `environment` runtime signal — see the `scriptUrl` docs.
    */
   env?: OmniFIEnv;
   /**
@@ -140,7 +147,14 @@ export interface OmniFIConfig {
    * exceptional circumstances. Prefer the `env` field for normal
    * production / staging / development switching.
    *
-   * When both `env` and `scriptUrl` are set, `scriptUrl` takes precedence.
+   * **URL-only precedence.** When both `env` and `scriptUrl` are set,
+   * `scriptUrl` wins for the **loader script URL only** — the
+   * `environment` value passed to `window.OmniFI.connect()` is still
+   * derived from `env` and defaults to `"production"`. A consumer who
+   * sets a custom staging / development `scriptUrl` MUST also set the
+   * matching `env`; otherwise the loaded script and the widget iframe
+   * origin can diverge (e.g. staging script loaded but the iframe still
+   * runs in production mode).
    *
    * **Widget / SDK version coupling.** This SDK's TypeScript types describe
    * the contract emitted by the **current** widget release. Pinning
