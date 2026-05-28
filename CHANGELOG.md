@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `env` field on `useOmniFILink` config (`'development' | 'staging' | 'production'`,
+  default `'production'`) — switches the CDN URL the SDK loads. Mirrors the
+  pattern used by the vanilla JS `link-loader` and removes the need for host
+  integrations targeting staging to hardcode the CDN URL. Exported alongside
+  the `OmniFIEnv` type and the underlying `getScriptUrl(env)` helper.
 - Documented sandbox magic-email credentials for error-screen testing
   (`sandbox.invalid-credentials@example.com`, `sandbox.locked@example.com`,
   `sandbox.timeout@example.com`, `sandbox.unavailable@example.com`,
@@ -26,6 +31,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the change is widget-internal and observable only in sandbox QA.
 
 ### Changed
+- The `scriptUrl` override remains an escape hatch (version pinning, self-hosting)
+  and takes precedence over `env` when both are supplied. Documented as advanced
+  usage in the new README "Environments" section.
 - Restructured the README's sandbox / testing content into a single
   "Testing your integration" section with three subsections (sandbox mode,
   happy path, error states). Folded the existing mock-institution and OTP

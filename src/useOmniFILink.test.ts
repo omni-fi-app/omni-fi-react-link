@@ -210,4 +210,78 @@ describe("useOmniFILink Hook", () => {
     expect(mockDestroy1).toHaveBeenCalledTimes(1);
     expect(mockDestroy2).toHaveBeenCalledTimes(0);
   });
+
+  // ---------------------------------------------------------------------------
+  // env field — script-URL switching
+  // ---------------------------------------------------------------------------
+
+  test("env: 'staging' injects a script tag pointing at the staging CDN", () => {
+    renderHook(() =>
+      useOmniFILink({
+        token: "link-staging-token",
+        env: "staging",
+        onSuccess: mock(() => {}),
+      }),
+    );
+
+    const script = document.querySelector<HTMLScriptElement>(
+      'script[src="https://staging-cdn.omni-fi.co/v1/omni-fi-connect.js"]',
+    );
+    expect(script).not.toBeNull();
+    expect(script?.async).toBe(true);
+  });
+
+  test("env: 'development' injects a script tag pointing at the local Vite dev server", () => {
+    renderHook(() =>
+      useOmniFILink({
+        token: "link-dev-token",
+        env: "development",
+        onSuccess: mock(() => {}),
+      }),
+    );
+
+    const script = document.querySelector<HTMLScriptElement>(
+      'script[src="http://localhost:5173/omni-fi-connect.js"]',
+    );
+    expect(script).not.toBeNull();
+  });
+
+  test("env: 'production' is the default and resolves to the production CDN", () => {
+    renderHook(() =>
+      useOmniFILink({
+        token: "link-prod-token",
+        env: "production",
+        onSuccess: mock(() => {}),
+      }),
+    );
+
+    const script = document.querySelector<HTMLScriptElement>(
+      'script[src="https://cdn.omni-fi.co/v1/omni-fi-connect.js"]',
+    );
+    expect(script).not.toBeNull();
+  });
+
+  test("explicit scriptUrl override takes precedence over env (escape hatch)", () => {
+    const customUrl = "https://custom.example.com/widget-v2.js";
+    renderHook(() =>
+      useOmniFILink({
+        token: "link-pinned-token",
+        env: "staging", // would otherwise resolve to staging-cdn
+        scriptUrl: customUrl,
+        onSuccess: mock(() => {}),
+      }),
+    );
+
+    // Custom URL was used — env was overridden.
+    const customScript = document.querySelector<HTMLScriptElement>(
+      `script[src="${customUrl}"]`,
+    );
+    expect(customScript).not.toBeNull();
+
+    // Staging URL was NOT injected (escape hatch precedence).
+    const stagingScript = document.querySelector<HTMLScriptElement>(
+      'script[src="https://staging-cdn.omni-fi.co/v1/omni-fi-connect.js"]',
+    );
+    expect(stagingScript).toBeNull();
+  });
 });

@@ -68,6 +68,45 @@ function ConnectButton({ linkToken }: { linkToken: string }) {
 
 ---
 
+## Environments
+
+Switch the CDN the SDK loads the widget script from by setting `env` on the
+`useOmniFILink` config:
+
+```tsx
+useOmniFILink({
+  token: linkToken,
+  env: "staging", // 'development' | 'staging' | 'production' (default)
+  onSuccess({ connections }) { /* … */ },
+});
+```
+
+| `env`                    | Script loaded from                                                                       |
+| ------------------------ | ---------------------------------------------------------------------------------------- |
+| `"production"` (default) | `https://cdn.omni-fi.co/v1/omni-fi-connect.js`                                            |
+| `"staging"`              | `https://staging-cdn.omni-fi.co/v1/omni-fi-connect.js`                                    |
+| `"development"`          | `http://localhost:5173/omni-fi-connect.js` (expects a local Vite dev server on port 5173) |
+
+The `/v1/` prefix is a non-breaking-upgrade path — a future `/v2/` bundle can
+ship without breaking integrations pinned to `v1`.
+
+### Advanced: pinning to a specific script URL
+
+For version-pinning (e.g. `/v2/` once available) or for self-hosting under
+exceptional circumstances, the `scriptUrl` field takes precedence over `env`:
+
+```tsx
+useOmniFILink({
+  token: linkToken,
+  scriptUrl: "https://cdn.omni-fi.co/v2/omni-fi-connect.js",
+  onSuccess({ connections }) { /* … */ },
+});
+```
+
+When both `env` and `scriptUrl` are supplied, `scriptUrl` wins.
+
+---
+
 ## Creating a link token
 
 The `token` prop is a short-lived `LinkToken` your server creates via the Omni-FI API before mounting the widget. It is never generated client-side.
