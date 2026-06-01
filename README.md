@@ -1,5 +1,6 @@
 # @omni-fi/react-link
 
+[![CI](https://img.shields.io/github/actions/workflow/status/omni-fi-app/omni-fi-react-link/ci.yml?branch=main&label=CI)](https://github.com/omni-fi-app/omni-fi-react-link/actions/workflows/ci.yml)
 [![License](https://img.shields.io/github/license/omni-fi-app/omni-fi-react-link.svg)](./LICENSE)
 
 Official React SDK for the [Omni-FI](https://omni-fi.co) Link widget. Provides a lightweight `useOmniFILink` hook that loads the Omni-FI Connect script from the CDN and manages the widget lifecycle.
