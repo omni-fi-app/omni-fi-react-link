@@ -575,3 +575,11 @@ bun test
 ## License
 
 [MIT](./LICENSE) © 2026 Omni-FI
+
+## Continuous Integration
+
+CI follows the Omni-FI house style — see [`omni-fi-app/.github` → CI_CONVENTIONS.md](https://github.com/omni-fi-app/.github/blob/main/CI_CONVENTIONS.md).
+
+- **CI** (`.github/workflows/ci.yml`): job `CI`, Bun 1.3.14 + pinned Node (`.nvmrc`), SHA-pinned actions, least-privilege permissions, concurrency. Phases: Install → Lint → Build → Test.
+- **Code scanning**: GitHub *default* code-scanning setup (public repo — free).
+- **Dependabot** (`.github/dependabot.yml`): `github-actions` + `bun`, weekly, `chore(deps)`.
