@@ -98,9 +98,10 @@ export interface OmniFIConnection {
    *   so `source === undefined` is the implicit login/scrape case.
    *
    * Use this to discriminate uploaded vs logged-in connections in a mixed-mode
-   * session (a single `onSuccess` payload can contain both). Matches the widget's
-   * `CompletedConnection.source` contract; the union may gain variants in future
-   * releases, so treat any non-`"DOCUMENT_UPLOAD"` / absent value as login.
+   * session (a single `onSuccess` payload can contain both). Mirrors
+   * `OmniFILinkedConnection.source` in `omni-fi-link/packages/shared` (the wire
+   * contract); the union may gain variants in future releases, so treat any
+   * non-`"DOCUMENT_UPLOAD"` / absent value as login.
    */
   source?: "DOCUMENT_UPLOAD";
   /**
