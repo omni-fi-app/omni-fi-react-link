@@ -168,6 +168,43 @@ describe("SDK passthrough — session-token exchange regression", () => {
     expect(onSuccess).toHaveBeenCalledWith(successPayload);
   });
 
+  test("onSuccess passes a mixed-mode payload through with the document-upload `source` intact", () => {
+    const onSuccess = mock((_payload: OmniFISuccessPayload) => {});
+    let capturedConfig: OmniFIConfig | null = null;
+
+    window.OmniFI = {
+      connect: mock((config: OmniFIConfig) => {
+        capturedConfig = config;
+        return { destroy: mock(() => {}), setTheme: mock(() => {}), setLanguage: mock(() => {}) };
+      }),
+    };
+
+    const { result } = renderHook(() => useOmniFILink({ token: "link-test", onSuccess }));
+    act(() => {
+      result.current.open();
+    });
+
+    // A mixed session: one login connection (no `source`) + one document-upload
+    // connection (`source: "DOCUMENT_UPLOAD"`). The type must accept `source`
+    // and the SDK must forward it untouched so consumers can discriminate.
+    const successPayload: OmniFISuccessPayload = {
+      connections: [
+        { publicToken: "pt-login", connectionId: "conn-login", institutionId: "inst-001", customerType: "business" },
+        { publicToken: "pt-doc", connectionId: "conn-doc", institutionId: "inst-002", customerType: "personal", source: "DOCUMENT_UPLOAD" },
+      ],
+    };
+
+    act(() => {
+      capturedConfig!.onSuccess(successPayload);
+    });
+
+    expect(onSuccess).toHaveBeenCalledWith(successPayload);
+    const forwarded = onSuccess.mock.calls[0]![0] as OmniFISuccessPayload;
+    expect(forwarded.connections[1]!.source).toBe("DOCUMENT_UPLOAD");
+    // The login connection carries no source (the implicit login/scrape case).
+    expect(forwarded.connections[0]!.source).toBeUndefined();
+  });
+
   test("onSuccess payload contains all connections with publicToken and institutionId", () => {
     const receivedPayload = mock((_payload: OmniFISuccessPayload) => {});
     let capturedConfig: OmniFIConfig | null = null;

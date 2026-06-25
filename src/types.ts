@@ -88,9 +88,27 @@ export interface OmniFIConnection {
    */
   customerType?: "personal" | "business";
   /**
+   * How this connection's data was sourced.
+   *
+   * - `"DOCUMENT_UPLOAD"` — the end-user uploaded bank statements; the
+   *   connection is credential-less and its accounts/transactions come from the
+   *   parsed documents.
+   * - **absent** — the connection was established via the standard bank-login
+   *   (scrape) flow. The field is only emitted for document-upload connections,
+   *   so `source === undefined` is the implicit login/scrape case.
+   *
+   * Use this to discriminate uploaded vs logged-in connections in a mixed-mode
+   * session (a single `onSuccess` payload can contain both). Matches the widget's
+   * `CompletedConnection.source` contract; the union may gain variants in future
+   * releases, so treat any non-`"DOCUMENT_UPLOAD"` / absent value as login.
+   */
+  source?: "DOCUMENT_UPLOAD";
+  /**
    * Account IDs the end-user explicitly permitted the client to access.
    * Present for B2C flows where the user selects accounts in the widget.
-   * Undefined for B2B flows where all accounts are auto-confirmed.
+   * Undefined for B2B flows where all accounts are auto-confirmed. Document-upload
+   * connections auto-confirm their accounts (the upload is the consent), so this
+   * is typically undefined for `source: "DOCUMENT_UPLOAD"`.
    */
   permittedAccountIds?: string[];
 }
