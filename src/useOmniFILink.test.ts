@@ -413,7 +413,10 @@ describe("useOmniFILink Hook", () => {
           env: props.env,
           onSuccess: mock(() => {}),
         }),
-      { initialProps: { env: "staging" as const } },
+      // Type initialProps to the full union (not `as const`) so renderHook
+      // infers TProps = { env: "staging" | "production" } and the env=production
+      // rerender below typechecks. Mirrors the callback's param type.
+      { initialProps: { env: "staging" } as { env: "staging" | "production" } },
     );
 
     // Rerender with env=production. The hook MUST ignore the change for the

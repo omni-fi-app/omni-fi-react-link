@@ -13,7 +13,7 @@ The widget runs in an **isolated hosted iframe**. Cross-Origin Resource Sharing 
 
 ```
 Your App  →  link_token  →  Widget (isolated iframe)
-Your App  ←  { connections: [{ publicToken, connectionId, institutionId, customerType? }] }  ←  Widget
+Your App  ←  { connections: [{ publicToken, connectionId, institutionId, customerType?, source? }] }  ←  Widget
 ```
 
 ---
@@ -44,11 +44,13 @@ function ConnectButton({ linkToken }: { linkToken: string }) {
   const { open, isReady } = useOmniFILink({
     token: linkToken,
     onSuccess({ connections }) {
-      for (const { publicToken, connectionId, institutionId, customerType } of connections) {
+      for (const { publicToken, connectionId, institutionId, customerType, source } of connections) {
         // `connectionId` addresses the persisted Connection record directly
         // (e.g. PUT /connections/{id}/accounts). Exchange `publicToken` on
         // your server for an opaque API token when needed.
-        console.log("Connected:", institutionId, customerType, connectionId, publicToken);
+        // `source` is "DOCUMENT_UPLOAD" for statement uploads, undefined for
+        // bank-login connections — a mixed-mode session can return both.
+        console.log("Connected:", institutionId, customerType, source ?? "LOGIN", connectionId, publicToken);
       }
     },
     onError(error) {
@@ -523,7 +525,7 @@ useOmniFILink({
 | Property      | Type                                   | Required | Description                                |
 | ------------- | -------------------------------------- | -------- | ------------------------------------------ |
 | `token`       | `string`                                      | Yes      | Short-lived `link_token` from your server. |
-| `onSuccess`   | `(payload: OmniFISuccessPayload) => void`     | Yes      | Called once all connections are complete. `payload.connections` is an array of `{ publicToken, connectionId, institutionId, customerType?, permittedAccountIds? }`. `connectionId` is the persisted Connection's UUID — addressable via the connection-scoped REST endpoints; `publicToken` is the opaque token you exchange server-side. `customerType` and `permittedAccountIds` are optional (the widget may emit `connection-linked` before either is resolved, and B2B flows auto-confirm accounts). |
+| `onSuccess`   | `(payload: OmniFISuccessPayload) => void`     | Yes      | Called once all connections are complete. `payload.connections` is an array of `{ publicToken, connectionId, institutionId, customerType?, source?, permittedAccountIds? }`. `connectionId` is the persisted Connection's UUID — addressable via the connection-scoped REST endpoints; `publicToken` is the opaque token you exchange server-side. `customerType` and `permittedAccountIds` are optional (the widget may emit `connection-linked` before either is resolved, and B2B flows auto-confirm accounts). `source` is `"DOCUMENT_UPLOAD"` for statement-upload connections and absent for bank-login connections — use it to discriminate the two in a mixed-mode session. |
 | `onError`     | `(error: OmniFIError) => void`                | No       | Called when the widget reports an error. |
 | `onExit`      | `() => void`                                  | No       | Called when the user closes the widget without completing. |
 | `onEvent`     | `(eventName: string, metadata?: Record<string, unknown>) => void` | No       | Called for intermediate events (e.g., `omni-fi:connection-linked` per bank linked). |
