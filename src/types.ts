@@ -82,10 +82,25 @@ export type OmniFIErrorCode =
   | "LOGIN_FAILED"
   | "INSTITUTION_TIMEOUT"
   | "INSTITUTION_UNAVAILABLE"
+  | "ACCOUNT_NOT_FOUND"
   | "NETWORK_ERROR"
   | "TIMEOUT"
   | "TRANSIENT_BANK_ERROR"
   | "UI_FLOW_BROKEN"
+  // Short-form session codes. These are NOT duplicates of the
+  // `SESSION_TOKEN_*` members above: those are the HTTP API codes returned by
+  // `POST /connections/...`, while these are what the widget itself posts on
+  // `omni-fi:error` after mapping. A host switching on `error.code` sees the
+  // short form, so both spellings have to be declared.
+  | "SESSION_EXPIRED"
+  | "SESSION_IDLE_EXPIRED"
+  | "SESSION_REVOKED"
+  // Fallbacks the widget emits directly rather than deriving from a failure:
+  // `GENERIC_ERROR` when it reaches its error screen with no classified
+  // cause, `NO_COMPLETED_CONNECTIONS` when the success screen is somehow
+  // reached with nothing linked.
+  | "GENERIC_ERROR"
+  | "NO_COMPLETED_CONNECTIONS"
   // Generic
   | "VALIDATION_ERROR";
 

@@ -140,6 +140,7 @@ describe("OmniFIErrorCode — the terminal codes onError actually receives", () 
     "LOGIN_FAILED",
     "INSTITUTION_TIMEOUT",
     "INSTITUTION_UNAVAILABLE",
+    "ACCOUNT_NOT_FOUND",
     "NETWORK_ERROR",
     "TIMEOUT",
     "TRANSIENT_BANK_ERROR",
@@ -147,7 +148,27 @@ describe("OmniFIErrorCode — the terminal codes onError actually receives", () 
   ] satisfies OmniFIErrorCode[];
 
   test("every terminal bank-flow code is part of the union", () => {
-    expect(terminalCodes).toHaveLength(11);
+    expect(terminalCodes).toHaveLength(12);
+  });
+
+  test("the short-form session codes the widget actually posts are in the union", () => {
+    // The widget posts `errorType` verbatim, so a host sees the short form —
+    // not the `SESSION_TOKEN_*` spelling used by the HTTP API. Both reach
+    // `onError` through different routes, so both must be declared.
+    const shortSessionCodes = [
+      "SESSION_EXPIRED",
+      "SESSION_IDLE_EXPIRED",
+      "SESSION_REVOKED",
+    ] satisfies OmniFIErrorCode[];
+    expect(shortSessionCodes).toHaveLength(3);
+  });
+
+  test("the widget's own fallback codes are in the union", () => {
+    const fallbacks = [
+      "GENERIC_ERROR",
+      "NO_COMPLETED_CONNECTIONS",
+    ] satisfies OmniFIErrorCode[];
+    expect(fallbacks).toHaveLength(2);
   });
 
   test("the documented error-handling example typechecks", () => {
