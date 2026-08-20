@@ -421,4 +421,87 @@ describe("SDK passthrough — session-token exchange regression", () => {
   test("onEvent fires with OMNIFI_EVENTS.CONNECTION_LINKED constant value", () => {
     expect(OMNIFI_EVENTS.CONNECTION_LINKED).toBe("omni-fi:connection-linked");
   });
+
+  describe("onSuccess — the override actually reaches the loader", () => {
+    // The adapter is applied by spreading the host config and then overriding
+    // `onSuccess` AFTER the spread. Key order is load-bearing: written the other
+    // way round, the host's raw callback would win and the loader would hand it
+    // an array.
+    //
+    // Removing the adapter is already caught — seven tests across three files go
+    // red, verified by mutation. This asserts the mechanism directly rather than
+    // leaving it to be inferred from those failures, because "the override wins"
+    // is the property that matters and it is one keystroke from being wrong.
+
+    test("the loader is handed the SDK's wrapper, not the host's callback", () => {
+      const hostOnSuccess = (_payload: OmniFISuccessPayload) => {};
+      let captured: OmniFIWidgetLoaderConfig | null = null;
+
+      (window as unknown as { OmniFI: unknown }).OmniFI = {
+        connect: (cfg: OmniFIWidgetLoaderConfig) => {
+          captured = cfg;
+          return {
+            destroy: () => {},
+            setTheme: () => {},
+            setLanguage: () => {},
+          };
+        },
+      };
+
+      const { result } = renderHook(() =>
+        useOmniFILink({ token: "tok", onSuccess: hostOnSuccess }),
+      );
+      act(() => {
+        result.current.open();
+      });
+
+      const cfg = captured as unknown as OmniFIWidgetLoaderConfig | null;
+      expect(cfg).not.toBeNull();
+      // The identity check is the whole point: if the spread won, these would be
+      // the same function and the loader would call it with an array.
+      expect(cfg!.onSuccess).not.toBe(hostOnSuccess);
+    });
+
+    test("the wrapper hands the host an envelope built from the loader's array", () => {
+      let received: OmniFISuccessPayload | null = null;
+      let captured: OmniFIWidgetLoaderConfig | null = null;
+
+      (window as unknown as { OmniFI: unknown }).OmniFI = {
+        connect: (cfg: OmniFIWidgetLoaderConfig) => {
+          captured = cfg;
+          return {
+            destroy: () => {},
+            setTheme: () => {},
+            setLanguage: () => {},
+          };
+        },
+      };
+
+      const { result } = renderHook(() =>
+        useOmniFILink({
+          token: "tok",
+          onSuccess: (payload) => {
+            received = payload;
+          },
+        }),
+      );
+      act(() => {
+        result.current.open();
+      });
+
+      const cfg = captured as unknown as OmniFIWidgetLoaderConfig | null;
+      act(() => {
+        // Exactly how the loader invokes it: the bare array.
+        cfg!.onSuccess([
+          { publicToken: "pt", connectionId: "c1", institutionId: "inst_mcb" },
+        ]);
+      });
+
+      const got = received as unknown as OmniFISuccessPayload | null;
+      expect(got).not.toBeNull();
+      expect(Array.isArray(got)).toBe(false);
+      expect(got!.connections).toHaveLength(1);
+      expect(got!.connections[0]?.institutionId).toBe("inst_mcb");
+    });
+  });
 });
