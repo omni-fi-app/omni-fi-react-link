@@ -8,6 +8,20 @@ export const OMNIFI_EVENTS = {
   SET_THEME: "omni-fi:set-theme",
   SET_LANGUAGE: "omni-fi:set-language",
   CONNECTION_LINKED: "omni-fi:connection-linked",
+  /**
+   * Non-terminal. The user hit something they can recover from in place —
+   * a wrong password, a bad OTP, a rejected account — and is still in the
+   * flow. Log it as a breadcrumb; do not treat the session as over. That is
+   * what separates it from `ERROR`, which is terminal.
+   */
+  INLINE_ERROR: "omni-fi:inline-error",
+  /**
+   * Loader-level handshake: the widget acknowledging the host's `READY`.
+   * Consumers rarely need it, but it is part of the postMessage vocabulary
+   * and `onEvent` receives it, so it is named here rather than reaching a
+   * host as an unrecognised string.
+   */
+  READY_ACK: "omni-fi:ready-ack",
 } as const;
 
 export type OmniFIEventType =
@@ -55,6 +69,23 @@ export type OmniFIErrorCode =
   // Credential / session errors
   | "SANDBOX_CREDENTIALS_REQUIRED"
   | "ORIGIN_NOT_ALLOWED"
+  // Terminal bank-flow failures. Everything above is the API rejecting the
+  // request; these are the widget giving up mid-flow, and in practice they
+  // are the codes `onError` receives most often. `INVALID_CREDENTIALS` and
+  // `ACCOUNT_LOCKED` are the unprefixed forms some institutions still emit —
+  // both spellings reach hosts, so both are declared rather than silently
+  // failing a consumer's exhaustive switch.
+  | "AUTH_INVALID_CREDENTIALS"
+  | "AUTH_ACCOUNT_LOCKED"
+  | "INVALID_CREDENTIALS"
+  | "ACCOUNT_LOCKED"
+  | "LOGIN_FAILED"
+  | "INSTITUTION_TIMEOUT"
+  | "INSTITUTION_UNAVAILABLE"
+  | "NETWORK_ERROR"
+  | "TIMEOUT"
+  | "TRANSIENT_BANK_ERROR"
+  | "UI_FLOW_BROKEN"
   // Generic
   | "VALIDATION_ERROR";
 
@@ -112,6 +143,43 @@ export interface OmniFIConnection {
    * is typically undefined for `source: "DOCUMENT_UPLOAD"`.
    */
   permittedAccountIds?: string[];
+  /**
+   * The institution's full legal name (e.g. `"The Mauritius Commercial Bank
+   * Ltd"`). Mirrors `OmniFILinkedConnection.institutionName` in
+   * `omni-fi-link/packages/shared`.
+   *
+   * Prefer `institutionNameShort` for anything user-facing — see below.
+   */
+  institutionName?: string;
+  /**
+   * The institution's short display name (e.g. `"MCB"`, `"MCB Pro"`). This is
+   * the one to render.
+   *
+   * `institutionName` cannot be used to tell a bank's personal and business
+   * tiers apart, because both tiers share one legal name — two rows labelled
+   * from it are indistinguishable. The short name is what carries the
+   * distinction.
+   *
+   * Optional because older widget builds did not send it; fall back to
+   * `institutionName`, then `institutionId`.
+   */
+  institutionNameShort?: string;
+  /**
+   * Multi-profile institutions only (Absa Pro). One login can expose several
+   * banking profiles, each of which becomes its own `Connection`; this UUID
+   * ties that set together so a host can group them under one heading rather
+   * than listing N apparently unrelated banks.
+   *
+   * Undefined for single-profile flows.
+   */
+  connectionGroupId?: string;
+  /**
+   * Multi-profile institutions only — the bank's own label for this profile
+   * (e.g. `"Operating Account"`), so grouped rows can be told apart.
+   *
+   * Undefined for single-profile flows.
+   */
+  profileDisplayName?: string;
 }
 
 export interface OmniFISuccessPayload {
