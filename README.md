@@ -505,6 +505,8 @@ useOmniFILink({
 | `destroy` | `() => void` | Closes the widget and cleans up its handlers. Called automatically on unmount. |
 | `isReady` | `boolean`    | `true` once the CDN script has loaded.           |
 | `error`   | `Error \| null` | Set if the CDN script fails to load.          |
+| `setTheme` | `(theme: OmniFITheme) => void` | Switches the open widget between `'light'`, `'dark'` and `'system'` at runtime. No-op before `open()`. |
+| `setLanguage` | `(lang: OmniFILanguage) => void` | Switches the open widget between `'en-GB'` and `'fr'` at runtime. No-op before `open()`. |
 
 ### `OmniFIConfig`
 
@@ -514,8 +516,11 @@ useOmniFILink({
 | `onSuccess`   | `(payload: OmniFISuccessPayload) => void`     | Yes      | Called once all connections are complete. `payload.connections` is an array of `{ publicToken, connectionId, institutionId, institutionName?, institutionNameShort?, customerType?, source?, permittedAccountIds?, connectionGroupId?, profileDisplayName? }`. Render `institutionNameShort` — a bank's personal and business tiers share one legal name, so `institutionName` alone cannot tell them apart. `connectionGroupId` and `profileDisplayName` appear only for multi-profile institutions, where one login yields several Connections. `connectionId` is the persisted Connection's UUID — addressable via the connection-scoped REST endpoints; `publicToken` is the opaque token you exchange server-side. `customerType` and `permittedAccountIds` are optional (the widget may emit `connection-linked` before either is resolved, and B2B flows auto-confirm accounts). `source` is `"DOCUMENT_UPLOAD"` for statement-upload connections and absent for bank-login connections — use it to discriminate the two in a mixed-mode session. |
 | `onError`     | `(error: OmniFIError) => void`                | No       | Called when the widget reports an error. |
 | `onExit`      | `() => void`                                  | No       | Called when the user closes the widget without completing. |
-| `onEvent`     | `(eventName: string, metadata?: Record<string, unknown>) => void` | No       | Called for intermediate events (e.g., `omni-fi:connection-linked` per bank linked). |
+| `onEvent`     | `(eventName: OmniFIEventType \| (string & {}), metadata?: Record<string, unknown>) => void` | No       | Called for intermediate, non-terminal events (e.g. `omni-fi:connection-linked` per bank linked, `omni-fi:inline-error` for in-place-recoverable failures). For `omni-fi:inline-error` the metadata matches `OmniFIInlineErrorPayload` — narrow it with that type to read `screen` and `institutionId` without a cast. |
 | `displayMode` | `'iframe' \| 'popup'`                         | No       | Defaults to `iframe`.                      |
+| `containerId` | `string`                                      | No       | Id of an existing element to mount the iframe into. Omit to let the loader create its own overlay. |
+| `theme`       | `'light' \| 'dark' \| 'system'`               | No       | Initial theme. Change it after mount with `setTheme`. |
+| `language`    | `'en-GB' \| 'fr'`                             | No       | Initial language. Change it after mount with `setLanguage`. |
 | `env`         | `'development' \| 'staging' \| 'production'`  | No       | Defaults to `production`. See [Environments](#environments) — single source of truth for both the CDN URL and the widget runtime env signal. |
 | `scriptUrl`   | `string`                                      | No       | Advanced: override the CDN script URL for version pinning or self-hosting. Takes precedence over `env` when both are set. See [Environments](#environments). |
 
