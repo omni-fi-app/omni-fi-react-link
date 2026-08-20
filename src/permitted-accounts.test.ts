@@ -11,7 +11,7 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { renderHook, act } from "@testing-library/react";
 import { useOmniFILink } from "./useOmniFILink";
 import {
-  type OmniFIConfig,
+  type OmniFIWidgetLoaderConfig,
   type OmniFIConnection,
   type OmniFISuccessPayload,
   type OmniFIConnectionLinkedPayload,
@@ -80,10 +80,10 @@ describe("permittedAccountIds in connection events", () => {
 
   test("onSuccess receives permittedAccountIds from the loader in B2C flows", () => {
     const onSuccess = mock((_payload: OmniFISuccessPayload) => {});
-    let capturedConfig: OmniFIConfig | null = null;
+    let capturedConfig: OmniFIWidgetLoaderConfig | null = null;
 
     window.OmniFI = {
-      connect: mock((config: OmniFIConfig) => {
+      connect: mock((config: OmniFIWidgetLoaderConfig) => {
         capturedConfig = config;
         return {
           destroy: mock(() => {}),
@@ -114,7 +114,7 @@ describe("permittedAccountIds in connection events", () => {
     };
 
     act(() => {
-      capturedConfig!.onSuccess(b2cPayload);
+      capturedConfig!.onSuccess(b2cPayload.connections);
     });
 
     expect(onSuccess).toHaveBeenCalledTimes(1);
@@ -133,10 +133,10 @@ describe("permittedAccountIds in connection events", () => {
 
   test("multiple connections each carry their own permittedAccountIds in onSuccess", () => {
     const onSuccess = mock((_payload: OmniFISuccessPayload) => {});
-    let capturedConfig: OmniFIConfig | null = null;
+    let capturedConfig: OmniFIWidgetLoaderConfig | null = null;
 
     window.OmniFI = {
-      connect: mock((config: OmniFIConfig) => {
+      connect: mock((config: OmniFIWidgetLoaderConfig) => {
         capturedConfig = config;
         return {
           destroy: mock(() => {}),
@@ -174,7 +174,7 @@ describe("permittedAccountIds in connection events", () => {
     };
 
     act(() => {
-      capturedConfig!.onSuccess(multiPayload);
+      capturedConfig!.onSuccess(multiPayload.connections);
     });
 
     const firstCall = onSuccess.mock.calls[0];
@@ -190,10 +190,10 @@ describe("permittedAccountIds in connection events", () => {
 
   test("onSuccess receives undefined permittedAccountIds for B2B flows", () => {
     const onSuccess = mock((_payload: OmniFISuccessPayload) => {});
-    let capturedConfig: OmniFIConfig | null = null;
+    let capturedConfig: OmniFIWidgetLoaderConfig | null = null;
 
     window.OmniFI = {
-      connect: mock((config: OmniFIConfig) => {
+      connect: mock((config: OmniFIWidgetLoaderConfig) => {
         capturedConfig = config;
         return {
           destroy: mock(() => {}),
@@ -224,7 +224,7 @@ describe("permittedAccountIds in connection events", () => {
     };
 
     act(() => {
-      capturedConfig!.onSuccess(b2bPayload);
+      capturedConfig!.onSuccess(b2bPayload.connections);
     });
 
     const firstCall = onSuccess.mock.calls[0];
@@ -244,10 +244,10 @@ describe("permittedAccountIds in connection events", () => {
       (_eventName: string, _metadata?: Record<string, unknown>) => {},
     );
     const onSuccess = mock((_payload: OmniFISuccessPayload) => {});
-    let capturedConfig: OmniFIConfig | null = null;
+    let capturedConfig: OmniFIWidgetLoaderConfig | null = null;
 
     window.OmniFI = {
-      connect: mock((config: OmniFIConfig) => {
+      connect: mock((config: OmniFIWidgetLoaderConfig) => {
         capturedConfig = config;
         return {
           destroy: mock(() => {}),
@@ -297,10 +297,10 @@ describe("permittedAccountIds in connection events", () => {
       (_eventName: string, _metadata?: Record<string, unknown>) => {},
     );
     const onSuccess = mock((_payload: OmniFISuccessPayload) => {});
-    let capturedConfig: OmniFIConfig | null = null;
+    let capturedConfig: OmniFIWidgetLoaderConfig | null = null;
 
     window.OmniFI = {
-      connect: mock((config: OmniFIConfig) => {
+      connect: mock((config: OmniFIWidgetLoaderConfig) => {
         capturedConfig = config;
         return {
           destroy: mock(() => {}),

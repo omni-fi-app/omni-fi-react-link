@@ -11,7 +11,7 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { renderHook, act } from "@testing-library/react";
 import { useOmniFILink } from "./useOmniFILink";
 import {
-  type OmniFIConfig,
+  type OmniFIWidgetLoaderConfig,
   type OmniFIConnection,
   type OmniFIConnectionLinkedPayload,
   type OmniFISuccessPayload,
@@ -73,10 +73,10 @@ describe("connectionId on connection events", () => {
 
   test("onSuccess receives connectionId on every connection record", () => {
     const onSuccess = mock((_payload: OmniFISuccessPayload) => {});
-    let capturedConfig: OmniFIConfig | null = null;
+    let capturedConfig: OmniFIWidgetLoaderConfig | null = null;
 
     window.OmniFI = {
-      connect: mock((config: OmniFIConfig) => {
+      connect: mock((config: OmniFIWidgetLoaderConfig) => {
         capturedConfig = config;
         return {
           destroy: mock(() => {}),
@@ -112,7 +112,7 @@ describe("connectionId on connection events", () => {
     };
 
     act(() => {
-      capturedConfig!.onSuccess(payload);
+      capturedConfig!.onSuccess(payload.connections);
     });
 
     const firstCall = onSuccess.mock.calls[0];
@@ -130,10 +130,10 @@ describe("connectionId on connection events", () => {
     const onEvent = mock(
       (_eventName: string, _metadata?: Record<string, unknown>) => {},
     );
-    let capturedConfig: OmniFIConfig | null = null;
+    let capturedConfig: OmniFIWidgetLoaderConfig | null = null;
 
     window.OmniFI = {
-      connect: mock((config: OmniFIConfig) => {
+      connect: mock((config: OmniFIWidgetLoaderConfig) => {
         capturedConfig = config;
         return {
           destroy: mock(() => {}),

@@ -3,8 +3,11 @@ import {
   OMNIFI_EVENTS,
   type OmniFIConnection,
   type OmniFIErrorCode,
+  type OmniFIConfig,
   type OmniFIEventType,
+  type OmniFIInlineErrorPayload,
   type OmniFISuccessPayload,
+  type OmniFIWidgetLoaderConfig,
 } from "./types";
 
 /**
@@ -209,5 +212,93 @@ describe("OmniFIErrorCode — the terminal codes onError actually receives", () 
       "VALIDATION_ERROR",
     ] satisfies OmniFIErrorCode[];
     expect(apiCodes).toHaveLength(9);
+  });
+});
+
+describe("onSuccess — the loader/SDK boundary", () => {
+  // The one place the SDK is NOT a passthrough, and it has to not be.
+  //
+  // The loader calls `onSuccess(data.connections)` with the bare array
+  // (`packages/link-loader/src/index.ts`), while this SDK's documented API —
+  // every example in the README and the hosted docs — is
+  // `onSuccess({ connections })`. Something has to adapt, and it is the SDK:
+  // the loader's shape is what existing vanilla-JS integrators already rely on,
+  // so it cannot change without breaking them.
+  //
+  // Guarded here rather than only in the hook's own tests, because the failure
+  // is silent: a host destructuring `{ connections }` off an array gets
+  // `undefined` and simply never sees its connections.
+
+  test("the loader config type declares the ARRAY shape, not the envelope", () => {
+    // Compile-time. If `OmniFIWidgetLoaderConfig.onSuccess` ever drifts back to
+    // taking the envelope, this stops compiling — which is the point.
+    const received: OmniFIConnection[] = [];
+    const loaderStyle: OmniFIWidgetLoaderConfig["onSuccess"] = (connections) => {
+      received.push(...connections);
+    };
+    loaderStyle([
+      { publicToken: "pt", connectionId: "c", institutionId: "inst_mcb" },
+    ]);
+    expect(received).toHaveLength(1);
+    expect(received[0]?.institutionId).toBe("inst_mcb");
+  });
+
+  test("the host-facing config still declares the envelope", () => {
+    const seen: string[] = [];
+    const hostStyle: OmniFIConfig["onSuccess"] = ({ connections }) => {
+      seen.push(...connections.map((c) => c.institutionId));
+    };
+    hostStyle({
+      connections: [
+        { publicToken: "pt", connectionId: "c", institutionId: "inst_absa" },
+      ],
+    });
+    expect(seen).toEqual(["inst_absa"]);
+  });
+});
+
+describe("OmniFIErrorCode — extensible, not exhaustive", () => {
+  // The widget posts `errorType` verbatim, and `errorType` can carry any
+  // `Error.Type` the BACKEND stamps on a job — including document-pipeline
+  // codes that exist only in omni-fi-core and are invisible to this package.
+  // Four separate enumerations of "every reachable code" produced four
+  // different answers, so the union names what we know without claiming the
+  // set is closed. A host's `default:` branch stays reachable, as it must.
+
+  test("an unenumerated backend code is still assignable", () => {
+    const fromBackend: OmniFIErrorCode = "DOCUMENT_RECONCILIATION_FAILED";
+    expect(fromBackend).toBe("DOCUMENT_RECONCILIATION_FAILED");
+  });
+
+  test("known codes still narrow, so autocomplete and comparisons survive", () => {
+    const known: OmniFIErrorCode = "AUTH_INVALID_CREDENTIALS";
+    expect(known).toBe("AUTH_INVALID_CREDENTIALS");
+  });
+});
+
+describe("OmniFIInlineErrorPayload — the metadata onEvent actually receives", () => {
+  // `emitInlineError.ts` posts code/message/screen/institutionId as top-level
+  // fields. Naming the event without naming its payload left consumers casting
+  // `Record<string, unknown>` to read `metadata.screen`, which the README tells
+  // them to log to analytics.
+
+  test("carries the documented shape", () => {
+    const payload: OmniFIInlineErrorPayload = {
+      code: "WRONG_OTP_CODE",
+      message: "That code did not match.",
+      screen: "mfa",
+      institutionId: "inst_mcb",
+    };
+    expect(payload.screen).toBe("mfa");
+  });
+
+  test("institutionId is nullable — the user may not have picked a bank yet", () => {
+    const payload: OmniFIInlineErrorPayload = {
+      code: "VALIDATION_ERROR",
+      message: "Something was wrong with that input.",
+      screen: "credentials",
+      institutionId: null,
+    };
+    expect(payload.institutionId).toBeNull();
   });
 });

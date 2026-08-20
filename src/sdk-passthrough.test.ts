@@ -11,7 +11,7 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { renderHook, act } from "@testing-library/react";
 import { useOmniFILink } from "./useOmniFILink";
 import {
-  type OmniFIConfig,
+  type OmniFIWidgetLoaderConfig,
   type OmniFISuccessPayload,
   type OmniFIConnectionLinkedPayload,
   type OmniFIError,
@@ -54,7 +54,7 @@ describe("SDK passthrough — session-token exchange regression", () => {
   test("open() passes token to loader unchanged and loader creates iframe with token in URL", () => {
     const onSuccess = mock((_payload: OmniFISuccessPayload) => {});
 
-    const connectMock = mock((config: OmniFIConfig) => {
+    const connectMock = mock((config: OmniFIWidgetLoaderConfig) => {
       // Simulate the loader creating an iframe with the token in the URL
       const iframe = document.createElement("iframe");
       iframe.src = `https://connect.omni-fi.co/link?token=${config.token}`;
@@ -129,10 +129,10 @@ describe("SDK passthrough — session-token exchange regression", () => {
 
   test("onSuccess receives the new multi-connection payload from the loader", () => {
     const onSuccess = mock((_payload: OmniFISuccessPayload) => {});
-    let capturedConfig: OmniFIConfig | null = null;
+    let capturedConfig: OmniFIWidgetLoaderConfig | null = null;
 
     window.OmniFI = {
-      connect: mock((config: OmniFIConfig) => {
+      connect: mock((config: OmniFIWidgetLoaderConfig) => {
         capturedConfig = config;
         return {
           destroy: mock(() => {}),
@@ -161,7 +161,7 @@ describe("SDK passthrough — session-token exchange regression", () => {
     };
 
     act(() => {
-      capturedConfig!.onSuccess(successPayload);
+      capturedConfig!.onSuccess(successPayload.connections);
     });
 
     expect(onSuccess).toHaveBeenCalledTimes(1);
@@ -170,10 +170,10 @@ describe("SDK passthrough — session-token exchange regression", () => {
 
   test("onSuccess passes a mixed-mode payload through with the document-upload `source` intact", () => {
     const onSuccess = mock((_payload: OmniFISuccessPayload) => {});
-    let capturedConfig: OmniFIConfig | null = null;
+    let capturedConfig: OmniFIWidgetLoaderConfig | null = null;
 
     window.OmniFI = {
-      connect: mock((config: OmniFIConfig) => {
+      connect: mock((config: OmniFIWidgetLoaderConfig) => {
         capturedConfig = config;
         return { destroy: mock(() => {}), setTheme: mock(() => {}), setLanguage: mock(() => {}) };
       }),
@@ -195,7 +195,7 @@ describe("SDK passthrough — session-token exchange regression", () => {
     };
 
     act(() => {
-      capturedConfig!.onSuccess(successPayload);
+      capturedConfig!.onSuccess(successPayload.connections);
     });
 
     expect(onSuccess).toHaveBeenCalledWith(successPayload);
@@ -207,10 +207,10 @@ describe("SDK passthrough — session-token exchange regression", () => {
 
   test("onSuccess payload contains all connections with publicToken and institutionId", () => {
     const receivedPayload = mock((_payload: OmniFISuccessPayload) => {});
-    let capturedConfig: OmniFIConfig | null = null;
+    let capturedConfig: OmniFIWidgetLoaderConfig | null = null;
 
     window.OmniFI = {
-      connect: mock((config: OmniFIConfig) => {
+      connect: mock((config: OmniFIWidgetLoaderConfig) => {
         capturedConfig = config;
         return {
           destroy: mock(() => {}),
@@ -233,7 +233,7 @@ describe("SDK passthrough — session-token exchange regression", () => {
     };
 
     act(() => {
-      capturedConfig!.onSuccess(payload);
+      capturedConfig!.onSuccess(payload.connections);
     });
 
     const calls = receivedPayload.mock.calls;
@@ -253,10 +253,10 @@ describe("SDK passthrough — session-token exchange regression", () => {
 
   test("onError callback fires when the loader reports an error", () => {
     const onError = mock((_error: OmniFIError) => {});
-    let capturedConfig: OmniFIConfig | null = null;
+    let capturedConfig: OmniFIWidgetLoaderConfig | null = null;
 
     window.OmniFI = {
-      connect: mock((config: OmniFIConfig) => {
+      connect: mock((config: OmniFIWidgetLoaderConfig) => {
         capturedConfig = config;
         return {
           destroy: mock(() => {}),
@@ -293,10 +293,10 @@ describe("SDK passthrough — session-token exchange regression", () => {
 
   test("onExit callback fires when the user closes the widget", () => {
     const onExit = mock(() => {});
-    let capturedConfig: OmniFIConfig | null = null;
+    let capturedConfig: OmniFIWidgetLoaderConfig | null = null;
 
     window.OmniFI = {
-      connect: mock((config: OmniFIConfig) => {
+      connect: mock((config: OmniFIWidgetLoaderConfig) => {
         capturedConfig = config;
         return {
           destroy: mock(() => {}),
@@ -330,10 +330,10 @@ describe("SDK passthrough — session-token exchange regression", () => {
       (_eventName: string, _metadata?: Record<string, unknown>) => {},
     );
     const onSuccess = mock((_payload: OmniFISuccessPayload) => {});
-    let capturedConfig: OmniFIConfig | null = null;
+    let capturedConfig: OmniFIWidgetLoaderConfig | null = null;
 
     window.OmniFI = {
-      connect: mock((config: OmniFIConfig) => {
+      connect: mock((config: OmniFIWidgetLoaderConfig) => {
         capturedConfig = config;
         return {
           destroy: mock(() => {}),
@@ -378,10 +378,10 @@ describe("SDK passthrough — session-token exchange regression", () => {
       (_eventName: string, _metadata?: Record<string, unknown>) => {},
     );
     const onSuccess = mock((_payload: OmniFISuccessPayload) => {});
-    let capturedConfig: OmniFIConfig | null = null;
+    let capturedConfig: OmniFIWidgetLoaderConfig | null = null;
 
     window.OmniFI = {
-      connect: mock((config: OmniFIConfig) => {
+      connect: mock((config: OmniFIWidgetLoaderConfig) => {
         capturedConfig = config;
         return {
           destroy: mock(() => {}),
