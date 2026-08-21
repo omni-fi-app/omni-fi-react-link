@@ -13,7 +13,7 @@ The widget runs in an **isolated hosted iframe**. Cross-Origin Resource Sharing 
 
 ```
 Your App  →  link_token  →  Widget (isolated iframe)
-Your App  ←  { connections: [{ publicToken, connectionId, institutionId, customerType?, source? }] }  ←  Widget
+Your App  ←  { connections: [{ publicToken, connectionId, institutionId, institutionNameShort?, customerType?, source? }] }  ←  Widget
 ```
 
 ---
@@ -370,8 +370,8 @@ The override is sandbox-only; production tokens ignore it.
 > members (`SESSION_TOKEN_EXPIRED`, `SESSION_TOKEN_IDLE_EXPIRED`,
 > `SESSION_TOKEN_REVOKED`) are the HTTP API error codes returned by
 > `POST /connections/...` calls — the widget maps them to the short
-> runtime form before posting. Use the short form in the URL param; the
-> SDK union's longer forms will be aligned in a follow-up release.
+> runtime form before posting. Use the short form in the URL param. Both
+> spellings are part of the `OmniFIErrorCode` union, so either compiles.
 
 #### Routing errors in your host app
 
@@ -383,24 +383,11 @@ should do about them:
 ```tsx
 import { useOmniFILink, type OmniFIErrorCode } from "@omni-fi/react-link";
 
-// Runtime error codes the widget emits that aren't yet in the exported
-// `OmniFIErrorCode` union — see the TypeScript note below.
-type SandboxErrorCode =
-  | "AUTH_INVALID_CREDENTIALS"
-  | "AUTH_ACCOUNT_LOCKED"
-  | "INSTITUTION_TIMEOUT"
-  | "INSTITUTION_UNAVAILABLE"
-  | "NETWORK_ERROR"
-  | "ACCOUNT_NOT_FOUND"
-  | "UI_FLOW_BROKEN";
-
-type ExtendedErrorCode = OmniFIErrorCode | SandboxErrorCode;
-
 const { open, isReady } = useOmniFILink({
   token: linkToken,
   onSuccess({ connections }) { /* exchange publicTokens server-side */ },
   onError(error) {
-    switch (error.code as ExtendedErrorCode) {
+    switch (error.code) {
       case "AUTH_INVALID_CREDENTIALS":
       case "AUTH_ACCOUNT_LOCKED":
         toast.error("We couldn't sign you in. Please check with your bank.");
@@ -492,20 +479,19 @@ useOmniFILink({
 > integration captures *every* `inline-error` to Sentry/analytics
 > but only surfaces toasts on `error`.
 
-> **TypeScript note.** The `as ExtendedErrorCode` cast at the switch is
-> necessary because the seven codes above (`AUTH_INVALID_CREDENTIALS`,
+> **TypeScript note.** No cast is needed at the switch — `OmniFIErrorCode`
+> covers the terminal codes the widget emits (`AUTH_INVALID_CREDENTIALS`,
 > `AUTH_ACCOUNT_LOCKED`, `INSTITUTION_TIMEOUT`, `INSTITUTION_UNAVAILABLE`,
-> `NETWORK_ERROR`, `ACCOUNT_NOT_FOUND`, `UI_FLOW_BROKEN`) are runtime values
-> emitted by the backend but are not yet part of the exported
-> `OmniFIErrorCode` union — that widening will land in a follow-up SDK
-> release once the backend producer side ships. The cast-at-boundary
-> pattern shown above is the idiomatic workaround.
+> `NETWORK_ERROR`, `ACCOUNT_NOT_FOUND`, `UI_FLOW_BROKEN` and the rest)
+> alongside the HTTP API codes. The union is pinned against the widget's
+> emitted set by `src/types.contract.test.ts`, so the example above compiles
+> as written.
 >
-> Declaration merging via `declare module '@omni-fi/react-link'` won't work
-> here — `OmniFIErrorCode` is a `type` alias rather than an `interface`, and
-> TypeScript only supports merging on interfaces and (with caveats) modules.
-> The cast-at-boundary pattern above keeps the rest of your code fully
-> type-safe.
+> Both spellings of the session codes are present, and they are not
+> duplicates. `SESSION_TOKEN_EXPIRED` and friends are the HTTP API codes
+> returned by `POST /connections/...`; `SESSION_EXPIRED`, `SESSION_IDLE_EXPIRED`
+> and `SESSION_REVOKED` are the short runtime forms the widget itself posts on
+> `omni-fi:error`. A host switching on `error.code` sees the short form.
 
 ---
 
@@ -519,17 +505,22 @@ useOmniFILink({
 | `destroy` | `() => void` | Closes the widget and cleans up its handlers. Called automatically on unmount. |
 | `isReady` | `boolean`    | `true` once the CDN script has loaded.           |
 | `error`   | `Error \| null` | Set if the CDN script fails to load.          |
+| `setTheme` | `(theme: OmniFITheme) => void` | Switches the open widget between `'light'`, `'dark'` and `'system'` at runtime. No-op before `open()`. |
+| `setLanguage` | `(lang: OmniFILanguage) => void` | Switches the open widget between `'en-GB'` and `'fr'` at runtime. No-op before `open()`. |
 
 ### `OmniFIConfig`
 
 | Property      | Type                                   | Required | Description                                |
 | ------------- | -------------------------------------- | -------- | ------------------------------------------ |
 | `token`       | `string`                                      | Yes      | Short-lived `link_token` from your server. |
-| `onSuccess`   | `(payload: OmniFISuccessPayload) => void`     | Yes      | Called once all connections are complete. `payload.connections` is an array of `{ publicToken, connectionId, institutionId, customerType?, source?, permittedAccountIds? }`. `connectionId` is the persisted Connection's UUID — addressable via the connection-scoped REST endpoints; `publicToken` is the opaque token you exchange server-side. `customerType` and `permittedAccountIds` are optional (the widget may emit `connection-linked` before either is resolved, and B2B flows auto-confirm accounts). `source` is `"DOCUMENT_UPLOAD"` for statement-upload connections and absent for bank-login connections — use it to discriminate the two in a mixed-mode session. |
+| `onSuccess`   | `(payload: OmniFISuccessPayload) => void`     | Yes      | Called once all connections are complete. `payload.connections` is an array of `{ publicToken, connectionId, institutionId, institutionName?, institutionNameShort?, customerType?, source?, permittedAccountIds?, connectionGroupId?, profileDisplayName? }`. Render `institutionNameShort` — a bank's personal and business tiers share one legal name, so `institutionName` alone cannot tell them apart. `connectionGroupId` and `profileDisplayName` appear only for multi-profile institutions, where one login yields several Connections. `connectionId` is the persisted Connection's UUID — addressable via the connection-scoped REST endpoints; `publicToken` is the opaque token you exchange server-side. `customerType` and `permittedAccountIds` are optional (the widget may emit `connection-linked` before either is resolved, and B2B flows auto-confirm accounts). `source` is `"DOCUMENT_UPLOAD"` for statement-upload connections and absent for bank-login connections — use it to discriminate the two in a mixed-mode session. |
 | `onError`     | `(error: OmniFIError) => void`                | No       | Called when the widget reports an error. |
 | `onExit`      | `() => void`                                  | No       | Called when the user closes the widget without completing. |
-| `onEvent`     | `(eventName: string, metadata?: Record<string, unknown>) => void` | No       | Called for intermediate events (e.g., `omni-fi:connection-linked` per bank linked). |
+| `onEvent`     | `(eventName: OmniFIEventType \| (string & {}), metadata?: Record<string, unknown>) => void` | No       | Called for intermediate, non-terminal events (e.g. `omni-fi:connection-linked` per bank linked, `omni-fi:inline-error` for in-place-recoverable failures). For `omni-fi:inline-error` the metadata matches `OmniFIInlineErrorPayload` — narrow it with that type to read `screen` and `institutionId` without a cast. |
 | `displayMode` | `'iframe' \| 'popup'`                         | No       | Defaults to `iframe`.                      |
+| `containerId` | `string`                                      | No       | Id of an existing element to mount the iframe into. Omit to let the loader create its own overlay. |
+| `theme`       | `'light' \| 'dark' \| 'system'`               | No       | Initial theme. Change it after mount with `setTheme`. |
+| `language`    | `'en-GB' \| 'fr'`                             | No       | Initial language. Change it after mount with `setLanguage`. |
 | `env`         | `'development' \| 'staging' \| 'production'`  | No       | Defaults to `production`. See [Environments](#environments) — single source of truth for both the CDN URL and the widget runtime env signal. |
 | `scriptUrl`   | `string`                                      | No       | Advanced: override the CDN script URL for version pinning or self-hosting. Takes precedence over `env` when both are set. See [Environments](#environments). |
 

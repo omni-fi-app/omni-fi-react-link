@@ -155,6 +155,22 @@ export function useOmniFILink(config: OmniFIConfig): UseOmniFILinkResult {
     instanceRef.current = window.OmniFI.connect({
       ...configRef.current,
       environment: loaderEnvRef.current ?? "production",
+      // The one thing this hook does NOT pass through, and it has to not.
+      //
+      // The loader calls `onSuccess(data.connections)` with the bare array
+      // (`packages/link-loader/src/index.ts`), while this SDK's documented API
+      // — every example in the README and the hosted docs — is
+      // `onSuccess({ connections })`. Without this wrapper a host
+      // destructuring `{ connections }` off an array gets `undefined` and
+      // silently never sees its connections.
+      //
+      // The SDK adapts rather than the loader changing, because vanilla-JS
+      // integrators call the loader directly and already depend on its shape.
+      //
+      // Read through the ref, not the closure, so a host that swaps its
+      // callback between renders gets the current one — matching how every
+      // other config value here is resolved.
+      onSuccess: (connections) => configRef.current.onSuccess({ connections }),
     });
   }, []);
 

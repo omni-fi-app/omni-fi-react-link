@@ -8,6 +8,20 @@ export const OMNIFI_EVENTS = {
   SET_THEME: "omni-fi:set-theme",
   SET_LANGUAGE: "omni-fi:set-language",
   CONNECTION_LINKED: "omni-fi:connection-linked",
+  /**
+   * Non-terminal. The user hit something they can recover from in place —
+   * a wrong password, a bad OTP, a rejected account — and is still in the
+   * flow. Log it as a breadcrumb; do not treat the session as over. That is
+   * what separates it from `ERROR`, which is terminal.
+   */
+  INLINE_ERROR: "omni-fi:inline-error",
+  /**
+   * Loader-level handshake: the widget acknowledging the host's `READY`.
+   * Consumers rarely need it, but it is part of the postMessage vocabulary
+   * and `onEvent` receives it, so it is named here rather than reaching a
+   * host as an unrecognised string.
+   */
+  READY_ACK: "omni-fi:ready-ack",
 } as const;
 
 export type OmniFIEventType =
@@ -32,7 +46,7 @@ export type OmniFILanguage = "en-GB" | "fr";
  */
 export type OmniFIEnv = "development" | "staging" | "production";
 
-export type OmniFIErrorCode =
+export type OmniFIKnownErrorCode =
   // LinkToken errors
   | "LINK_TOKEN_INVALID"
   | "LINK_TOKEN_EXPIRED"
@@ -55,8 +69,60 @@ export type OmniFIErrorCode =
   // Credential / session errors
   | "SANDBOX_CREDENTIALS_REQUIRED"
   | "ORIGIN_NOT_ALLOWED"
+  // Terminal bank-flow failures. Everything above is the API rejecting the
+  // request; these are the widget giving up mid-flow, and in practice they
+  // are the codes `onError` receives most often. `INVALID_CREDENTIALS` and
+  // `ACCOUNT_LOCKED` are the unprefixed forms some institutions still emit —
+  // both spellings reach hosts, so both are declared rather than silently
+  // failing a consumer's exhaustive switch.
+  | "AUTH_INVALID_CREDENTIALS"
+  | "AUTH_ACCOUNT_LOCKED"
+  | "INVALID_CREDENTIALS"
+  | "ACCOUNT_LOCKED"
+  | "LOGIN_FAILED"
+  | "INSTITUTION_TIMEOUT"
+  | "INSTITUTION_UNAVAILABLE"
+  | "ACCOUNT_NOT_FOUND"
+  | "NETWORK_ERROR"
+  | "TIMEOUT"
+  | "TRANSIENT_BANK_ERROR"
+  | "UI_FLOW_BROKEN"
+  // Short-form session codes. These are NOT duplicates of the
+  // `SESSION_TOKEN_*` members above: those are the HTTP API codes returned by
+  // `POST /connections/...`, while these are what the widget itself posts on
+  // `omni-fi:error` after mapping. A host switching on `error.code` sees the
+  // short form, so both spellings have to be declared.
+  | "SESSION_EXPIRED"
+  | "SESSION_IDLE_EXPIRED"
+  | "SESSION_REVOKED"
+  // Fallbacks the widget emits directly rather than deriving from a failure:
+  // `GENERIC_ERROR` when it reaches its error screen with no classified
+  // cause, `NO_COMPLETED_CONNECTIONS` when the success screen is somehow
+  // reached with nothing linked.
+  | "GENERIC_ERROR"
+  | "NO_COMPLETED_CONNECTIONS"
   // Generic
   | "VALIDATION_ERROR";
+
+/**
+ * The code on a terminal `onError`.
+ *
+ * **Deliberately open.** The widget posts its `errorType` verbatim, and that
+ * value can originate in the backend — the document pipeline alone contributes
+ * codes (`DOCUMENT_NOT_BANK_STATEMENT`, `DOCUMENT_RECONCILIATION_FAILED`, …)
+ * that exist only in omni-fi-core and can never be enumerated from this
+ * package. Four separate attempts to list "every reachable code" produced four
+ * different answers.
+ *
+ * So the union names what we know — you keep autocomplete and exact-comparison
+ * narrowing on those — without asserting the set is closed. Concretely: your
+ * `default:` branch stays reachable, which is correct, because a code you have
+ * never heard of can and will arrive. Do not write an exhaustiveness check
+ * (`const _: never = code`) against this type.
+ *
+ * `OmniFIKnownErrorCode` is the closed union if you genuinely need one.
+ */
+export type OmniFIErrorCode = OmniFIKnownErrorCode | (string & {});
 
 export interface OmniFIError {
   code: OmniFIErrorCode;
@@ -112,6 +178,62 @@ export interface OmniFIConnection {
    * is typically undefined for `source: "DOCUMENT_UPLOAD"`.
    */
   permittedAccountIds?: string[];
+  /**
+   * The institution's full legal name (e.g. `"The Mauritius Commercial Bank
+   * Ltd"`). Mirrors `OmniFILinkedConnection.institutionName` in
+   * `omni-fi-link/packages/shared`.
+   *
+   * Prefer `institutionNameShort` for anything user-facing — see below.
+   */
+  institutionName?: string;
+  /**
+   * The institution's short display name (e.g. `"MCB"`, `"MCB Pro"`). This is
+   * the one to render.
+   *
+   * `institutionName` cannot be used to tell a bank's personal and business
+   * tiers apart, because both tiers share one legal name — two rows labelled
+   * from it are indistinguishable. The short name is what carries the
+   * distinction.
+   *
+   * Optional because older widget builds did not send it; fall back to
+   * `institutionName`, then `institutionId`.
+   */
+  institutionNameShort?: string;
+  /**
+   * Multi-profile institutions only (Absa Pro). One login can expose several
+   * banking profiles, each of which becomes its own `Connection`; this UUID
+   * ties that set together so a host can group them under one heading rather
+   * than listing N apparently unrelated banks.
+   *
+   * Undefined for single-profile flows.
+   */
+  connectionGroupId?: string;
+  /**
+   * Multi-profile institutions only — the bank's own label for this profile
+   * (e.g. `"Operating Account"`), so grouped rows can be told apart.
+   *
+   * Undefined for single-profile flows.
+   */
+  profileDisplayName?: string;
+}
+
+/**
+ * Metadata delivered with `onEvent("omni-fi:inline-error", metadata)`.
+ *
+ * Non-terminal: the user hit something recoverable in place — a wrong
+ * password, a bad OTP, a rejected account — and is still in the flow. Log it
+ * as a breadcrumb; do not treat the session as over.
+ *
+ * Mirrors what the widget posts (`lib/emitInlineError.ts`), which sends these
+ * as top-level fields rather than nested under a `metadata` key.
+ */
+export interface OmniFIInlineErrorPayload {
+  code: string;
+  message: string;
+  /** Which screen the user was on — useful for funnel analytics. */
+  screen: "credentials" | "mfa" | "account_select";
+  /** Null when the failure happened before a bank was chosen. */
+  institutionId: string | null;
 }
 
 export interface OmniFISuccessPayload {
@@ -207,15 +329,30 @@ export interface OmniFIInstance {
  *
  * Module-local — not part of the SDK's public consumer-facing surface.
  */
-interface WidgetLoaderConfig extends OmniFIConfig {
+/**
+ * What `window.OmniFI.connect()` actually accepts — NOT the same shape a host
+ * passes to `useOmniFILink`, in one specific and load-bearing way.
+ *
+ * The loader invokes `onSuccess(data.connections)` with the bare ARRAY
+ * (`packages/link-loader/src/index.ts`), while this SDK's documented API is
+ * `onSuccess({ connections })`. `useOmniFILink` adapts between the two. Left
+ * unadapted, a host destructuring `{ connections }` off an array would get
+ * `undefined` and silently never see its connections.
+ *
+ * The loader's shape is the one that cannot move: vanilla-JS integrators call
+ * it directly and already depend on it.
+ */
+export interface OmniFIWidgetLoaderConfig
+  extends Omit<OmniFIConfig, "onSuccess"> {
   environment: "local" | "staging" | "production";
+  onSuccess: (connections: OmniFIConnection[]) => void;
 }
 
 // Extend the global Window object so TypeScript knows about our injected script
 declare global {
   interface Window {
     OmniFI?: {
-      connect: (options: WidgetLoaderConfig) => OmniFIInstance;
+      connect: (options: OmniFIWidgetLoaderConfig) => OmniFIInstance;
     };
   }
 }

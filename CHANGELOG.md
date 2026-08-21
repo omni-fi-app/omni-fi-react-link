@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **`onSuccess` now receives the documented `{ connections }` payload.** The
+  loader invokes `onSuccess(data.connections)` with the bare array, but the SDK
+  typed and documented the envelope and passed the host callback straight
+  through — so a host destructuring `{ connections }` got `undefined` and never
+  saw its connections. `useOmniFILink` now adapts between the two shapes. The
+  loader is unchanged, because vanilla-JS integrations depend on its shape.
+
+### Added
+- `institutionName` and `institutionNameShort` on `OmniFIConnection`. Render
+  `institutionNameShort` — a bank's personal and business tiers share one legal
+  name, so `institutionName` alone cannot tell them apart.
+- `connectionGroupId` and `profileDisplayName` on `OmniFIConnection`, for
+  multi-profile institutions where one login yields several Connections.
+- `INLINE_ERROR` and `READY_ACK` on `OMNIFI_EVENTS`, and
+  `OmniFIInlineErrorPayload` typing the metadata `omni-fi:inline-error`
+  delivers (`code`, `message`, `screen`, `institutionId`).
+- `OmniFIWidgetLoaderConfig` — the loader's real config shape, exported so a
+  test double cannot silently disagree with it.
+
+### Changed
+- `OmniFIErrorCode` is now `OmniFIKnownErrorCode | (string & {})`. It gained
+  the terminal bank-flow codes (`AUTH_INVALID_CREDENTIALS`,
+  `INSTITUTION_UNAVAILABLE`, `ACCOUNT_NOT_FOUND`, the short-form session codes
+  and others), but stops claiming the set is closed: the widget posts its
+  `errorType` verbatim and that can originate in the backend, so a `default:`
+  branch must stay reachable. `OmniFIKnownErrorCode` is the closed union if you
+  need exhaustiveness. Removes the `as ExtendedErrorCode` cast the README
+  previously required.
+
 ### Added
 - `env` field on `useOmniFILink` config (`'development' | 'staging' | 'production'`,
   default `'production'`). Single source of truth for env signalling — drives
