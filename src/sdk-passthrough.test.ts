@@ -57,7 +57,7 @@ describe("SDK passthrough — session-token exchange regression", () => {
     const connectMock = mock((config: OmniFIWidgetLoaderConfig) => {
       // Simulate the loader creating an iframe with the token in the URL
       const iframe = document.createElement("iframe");
-      iframe.src = `https://connect.omni-fi.co/link?token=${config.token}`;
+      iframe.src = `https://connect.omni-fi.co/?token=${config.token}`;
       document.body.appendChild(iframe);
       return {
         destroy: mock(() => { iframe.remove(); }),
@@ -81,10 +81,13 @@ describe("SDK passthrough — session-token exchange regression", () => {
       expect.objectContaining({ token: "test-link-token-123" }),
     );
 
-    // Loader (simulated) embedded the token in the iframe URL
+    // Loader (simulated) embedded the token in the iframe URL. The real
+    // loader builds `${baseUrl}/?${params}` at the ROOT path (see
+    // link-loader src/index.ts) — pin that contract so the simulation
+    // cannot drift from it.
     const iframe = document.querySelector<HTMLIFrameElement>("iframe");
     expect(iframe).not.toBeNull();
-    expect(iframe?.src).toContain("token=test-link-token-123");
+    expect(iframe?.src).toContain("https://connect.omni-fi.co/?token=test-link-token-123");
   });
 
   test("arbitrary token strings (session tokens, UUIDs) pass through without modification", () => {

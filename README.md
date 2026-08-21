@@ -354,7 +354,7 @@ internally, so this override is for **direct-browser QA**, not for
 programmatic navigation in your host app:
 
 ```text
-https://link.omni-fi.co/?token=<YOUR_LINK_TOKEN>&widget_simulate_error=INSTITUTION_UNAVAILABLE
+https://connect.omni-fi.co/?token=<YOUR_LINK_TOKEN>&widget_simulate_error=INSTITUTION_UNAVAILABLE
 ```
 
 Note the `&` separator — the link-token URL already carries a `?token=…`
