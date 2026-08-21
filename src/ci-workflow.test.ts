@@ -21,12 +21,35 @@
 
 import { describe, expect, test } from "bun:test";
 
-const WORKFLOW_PATH = `${import.meta.dir}/../.github/workflows/ci.yml`;
+const WORKFLOWS_DIR = `${import.meta.dir}/../.github/workflows`;
+const WORKFLOW_PATH = `${WORKFLOWS_DIR}/ci.yml`;
+
+/** Job keys in a workflow: two-space-indented `name:` lines under `jobs:`. */
+function jobsWithoutTimeout(yaml: string): string[] {
+  const lines = yaml.split("\n");
+  const start = lines.findIndex((l) => /^jobs:/.test(l));
+  if (start < 0) return [];
+  const missing: string[] = [];
+  for (let i = start + 1; i < lines.length; i++) {
+    const job = lines[i].match(/^ {2}([A-Za-z0-9_-]+):\s*$/);
+    if (!job) continue;
+    // Scan this job's own keys (4-space indent) until the next job starts.
+    let bounded = false;
+    for (let j = i + 1; j < lines.length && !/^ {2}[A-Za-z0-9_-]+:\s*$/.test(lines[j]); j++) {
+      if (/^ {4}timeout-minutes:\s*\d+\s*(?:#.*)?$/.test(lines[j])) { bounded = true; break; }
+    }
+    if (!bounded) missing.push(job[1]);
+  }
+  return missing;
+}
 
 /** GitHub's default job timeout, in minutes — the value we must not inherit. */
 const GITHUB_DEFAULT_TIMEOUT_MINUTES = 360;
 
-const TIMEOUT_DECLARATION = /^\s*timeout-minutes:\s*(\d+)\s*$/m;
+// Trailing comments are legal and used in this repo (claude-code-review.yml
+// writes `timeout-minutes: 30   # true backstop`). Requiring end-of-line after
+// the digits reports a declared timeout as absent — a false FAILURE.
+const TIMEOUT_DECLARATION = /^\s*timeout-minutes:\s*(\d+)\s*(?:#.*)?$/m;
 
 const PACKAGE_JSON_PATH = `${import.meta.dir}/../package.json`;
 
@@ -105,5 +128,35 @@ describe("CI workflow", () => {
         `${Bun.version}. Patch drift is fine; a minor difference is not — ` +
         `either \`bun upgrade --to ${pinned}\`, or move the pin deliberately.`,
     ).toBe(minorOf(Bun.version));
+  });
+
+  test("EVERY job in EVERY workflow bounds its own runtime", async () => {
+    // Generalised from the CI job after the omni-fi-link#101 bot review pointed
+    // out that deploy.yml was unbounded for the same reason — a stuck S3 sync or
+    // a stalled CloudFront invalidation outlasts a stuck test suite easily, and
+    // deploy runs on push to staging. Asserting the whole directory means the
+    // next workflow added cannot quietly reintroduce the 360-minute default.
+    const { readdirSync } = await import("node:fs");
+    const offenders: string[] = [];
+
+    for (const file of readdirSync(WORKFLOWS_DIR).filter((f) => f.endsWith(".yml"))) {
+      const yaml = await Bun.file(`${WORKFLOWS_DIR}/${file}`).text();
+      for (const job of jobsWithoutTimeout(yaml)) offenders.push(`${file}:${job}`);
+    }
+
+    expect(
+      offenders,
+      "these jobs inherit GitHub's 360-minute default — add timeout-minutes",
+    ).toEqual([]);
+  });
+
+  test("a trailing comment on the declaration still counts as bounded", () => {
+    // Regression guard for a bug in this file's own parser: requiring the line
+    // to END at the digits reported `timeout-minutes: 30   # note` as missing,
+    // which claude-code-review.yml has written since it was added.
+    expect(
+      jobsWithoutTimeout("jobs:\n  a:\n    timeout-minutes: 30   # backstop\n"),
+    ).toEqual([]);
+    expect(jobsWithoutTimeout("jobs:\n  a:\n    runs-on: x\n")).toEqual(["a"]);
   });
 });
