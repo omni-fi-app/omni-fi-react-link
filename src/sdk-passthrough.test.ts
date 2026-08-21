@@ -57,7 +57,7 @@ describe("SDK passthrough — session-token exchange regression", () => {
     const connectMock = mock((config: OmniFIConfig) => {
       // Simulate the loader creating an iframe with the token in the URL
       const iframe = document.createElement("iframe");
-      iframe.src = `https://connect.omni-fi.co/link?token=${config.token}`;
+      iframe.src = `https://connect.omni-fi.co/?token=${config.token}`;
       document.body.appendChild(iframe);
       return {
         destroy: mock(() => { iframe.remove(); }),
