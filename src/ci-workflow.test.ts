@@ -1,19 +1,22 @@
 /**
- * ci-workflow.test.ts — invariants of the `CI` workflow that nothing else checks.
+ * ci-workflow.test.ts — invariants of the workflows that nothing else checks.
  *
- * Reads `.github/workflows/ci.yml` as PLAIN TEXT rather than through a YAML
+ * Reads `.github/workflows/*.yml` as PLAIN TEXT rather than through a YAML
  * parser, following omni-fi-core's `TestCIFernGate`: the only YAML parser
  * reachable here is a transitive dependency of another tool, and a guard that
  * silently stops running when its parser goes missing reproduces the class of
  * failure it exists to prevent.
  *
- * The invariant: the `CI` job must bound its own runtime. GitHub's default is
- * 360 minutes. That was theoretical while CI was lint + build + unit tests, all
- * of which fail fast. It stopped being theoretical when the job gained a browser
- * suite (task 7.50): a hung page is now the most likely way this workflow stops
- * making progress, `playwright.config.ts` sets `retries: 0` so nothing shakes it
- * loose, and the check blocks every merge to `staging`. Six hours of a runner,
- * and six hours of a blocked queue.
+ * The invariant: every job must bound its own runtime. GitHub's default is 360
+ * minutes. The stakes are lower here than in omni-fi-web, which is where this
+ * guard originated (task 7.50) — that repo's CI gained a Playwright suite, and a
+ * hung browser is a far likelier way for a job to stop making progress than
+ * anything in this one, which is lint + build + test and fails fast. This repo
+ * has no browser suite and no deploy workflow at all.
+ *
+ * It is here anyway because `CI` is the required status check, so a hung job
+ * holds the merge as well as the runner, and because the guard is what stops the
+ * NEXT workflow added here from quietly inheriting the default.
  *
  * `concurrency.cancel-in-progress` bounds this for a branch someone pushes to
  * again. It does nothing for a PR that is opened and left.
