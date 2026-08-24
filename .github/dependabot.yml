@@ -10,10 +10,12 @@ updates:
     groups:
       github-actions:
         patterns: ["*"]
-        update-types: ["minor", "patch"]
-    ignore:
-      - dependency-name: "*"
-        update-types: ["version-update:semver-major"]
+        # Majors ARE proposed for Actions, and there is deliberately no `ignore`
+        # block on this ecosystem. A major here is the ordinary release cadence
+        # — a bumped Node runtime, a renamed input — and every action is pinned
+        # by SHA, so a bad bump is one revert. Bun below keeps the major-ignore,
+        # where a major genuinely can change runtime behaviour.
+        update-types: ["major", "minor", "patch"]
 
   - package-ecosystem: bun
     directory: /
