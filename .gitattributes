@@ -1,0 +1,26 @@
+# Line endings: normalise to LF in the repository, and check out LF on every
+# platform.
+#
+# `eol=lf` is doing the load-bearing work here, and `text=auto` alone would NOT
+# have been enough. `text=auto` normalises on CHECK-IN, and the index is already
+# all-LF — measured across all four repos, zero files carry CRLF. The failure is
+# on CHECKOUT: with `core.autocrlf=true`, which is the Windows default, git
+# converts LF blobs to CRLF in the working tree. Only `eol=lf` prevents that.
+#
+# Why it matters beyond taste. `.github/workflows/*.yml` is parsed as plain text
+# by a guard that asserts every CI job declares a timeout. On a CRLF working
+# tree every line carried a trailing `\r`, and in JS `\s` matches CR while `.`
+# does not — so `\s*$` still matched but `(?:#.*)?$` could not, breaking exactly
+# the COMMENTED lines the guard's trailing-comment tolerance existed for. An
+# unrecognised job header then failed to terminate the scan, which ran into the
+# next job and reported a genuinely unbounded job as bounded. Green on every
+# Linux CI run; broken on Windows. See omni-fi-link#101, omni-fi-web#25,
+# omni-fi-react-link#32.
+#
+# Safe as a blanket rule here: no .bat/.cmd/.ps1/.sln exists in any of these
+# repos, so nothing needs CRLF. `text=auto` still detects binaries and leaves
+# them untouched.
+#
+# NOTE for an existing checkout: this does not rewrite a working tree that is
+# already CRLF. After pulling, run `git rm --cached -r . && git reset --hard`.
+* text=auto eol=lf
