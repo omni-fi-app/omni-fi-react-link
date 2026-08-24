@@ -170,6 +170,30 @@ describe("CI workflow", () => {
     ).toEqual([]);
   });
 
+  test("a job's timeout is read from ITS OWN block, not from the file", () => {
+    // The two assertions above used to match the first `timeout-minutes`
+    // ANYWHERE in ci.yml. With one job that is harmless; a second job declared
+    // ahead of CI lends CI its bound, and both tests go green on a CI job that
+    // declares nothing. Measured: with `lint: timeout-minutes: 5` inserted
+    // above an unbounded CI, both passed. (The every-job sweep still failed, so
+    // the suite caught it — but these two tests did not enforce what they name.)
+    const twoJobs =
+      "jobs:\n  lint:\n    timeout-minutes: 5\n    runs-on: x\n  CI:\n    runs-on: x\n";
+    expect(jobTimeouts(twoJobs).get("lint")).toBe(5);
+    expect(jobTimeouts(twoJobs).get(CI_JOB)).toBeNull();
+  });
+
+  test("a trailing comment on the bun install line is tolerated", () => {
+    // Same class as JOB_TIMEOUT, in the assertion rather than the parser: a
+    // bare `$` here turns `bun-version-file: package.json # from packageManager`
+    // into a false FAILURE reading "ci.yml must install bun from package.json"
+    // against a ci.yml that does exactly that. Measured before the fix.
+    expect(
+      BUN_VERSION_FILE.test("        bun-version-file: package.json # from packageManager"),
+    ).toBe(true);
+    expect(BUN_VERSION_FILE.test("        bun-version-file: .bun-version")).toBe(false);
+  });
+
   test("a workflow written as .yaml is not invisible to the guard", () => {
     // GitHub reads BOTH extensions; a guard that sweeps only one has a hole the
     // shape of whichever file someone names `.yaml`, and it reports clean.
