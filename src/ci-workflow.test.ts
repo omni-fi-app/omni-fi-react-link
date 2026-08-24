@@ -162,6 +162,14 @@ describe("CI workflow", () => {
     ).toEqual([]);
   });
 
+  test("a workflow written as .yaml is not invisible to the guard", () => {
+    // GitHub reads BOTH extensions; a guard that sweeps only one has a hole the
+    // shape of whichever file someone names `.yaml`, and it reports clean.
+    expect(
+      ["ci.yml", "deploy.yaml", "README.md"].filter((f) => WORKFLOW_FILE.test(f)),
+    ).toEqual(["ci.yml", "deploy.yaml"]);
+  });
+
   test("a job key with a trailing comment is still inspected", () => {
     // YAML allows `build:  # note`. The key regex required the line to end at
     // the colon, so such a job was skipped entirely and reported clean.
