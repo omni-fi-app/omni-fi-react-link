@@ -28,17 +28,26 @@ const WORKFLOWS_DIR = `${import.meta.dir}/../.github/workflows`;
 const WORKFLOW_PATH = `${WORKFLOWS_DIR}/ci.yml`;
 
 /** Job keys in a workflow: two-space-indented `name:` lines under `jobs:`. */
+/**
+ * A job header: two-space key, optionally followed by a comment. The trailing
+ * comment matters twice over — without it a commented key is skipped, AND the
+ * inner scan below fails to stop at it and borrows the next job's timeout,
+ * reporting an unbounded job as bounded. One constant so the two uses cannot
+ * drift apart again.
+ */
+const JOB_HEADER = /^ {2}([A-Za-z0-9_-]+):\s*(?:#.*)?$/;
+
 function jobsWithoutTimeout(yaml: string): string[] {
   const lines = yaml.split("\n");
   const start = lines.findIndex((l) => /^jobs:/.test(l));
   if (start < 0) return [];
   const missing: string[] = [];
   for (let i = start + 1; i < lines.length; i++) {
-    const job = lines[i].match(/^ {2}([A-Za-z0-9_-]+):\s*$/);
+    const job = lines[i].match(JOB_HEADER);
     if (!job) continue;
     // Scan this job's own keys (4-space indent) until the next job starts.
     let bounded = false;
-    for (let j = i + 1; j < lines.length && !/^ {2}[A-Za-z0-9_-]+:\s*$/.test(lines[j]); j++) {
+    for (let j = i + 1; j < lines.length && !JOB_HEADER.test(lines[j]); j++) {
       if (/^ {4}timeout-minutes:\s*\d+\s*(?:#.*)?$/.test(lines[j])) { bounded = true; break; }
     }
     if (!bounded) missing.push(job[1]);
