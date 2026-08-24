@@ -27,7 +27,6 @@ import { describe, expect, test } from "bun:test";
 const WORKFLOWS_DIR = `${import.meta.dir}/../.github/workflows`;
 const WORKFLOW_PATH = `${WORKFLOWS_DIR}/ci.yml`;
 
-/** Job keys in a workflow: two-space-indented `name:` lines under `jobs:`. */
 /**
  * A job header: two-space key, optionally followed by a comment. The trailing
  * comment matters twice over — without it a commented key is skipped, AND the
@@ -37,6 +36,7 @@ const WORKFLOW_PATH = `${WORKFLOWS_DIR}/ci.yml`;
  */
 const JOB_HEADER = /^ {2}([A-Za-z0-9_-]+):\s*(?:#.*)?$/;
 
+/** Job keys under `jobs:` that declare no `timeout-minutes` of their own. */
 function jobsWithoutTimeout(yaml: string): string[] {
   const lines = yaml.split("\n");
   const start = lines.findIndex((l) => /^jobs:/.test(l));
