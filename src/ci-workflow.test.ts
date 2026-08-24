@@ -64,9 +64,11 @@ function jobsWithoutTimeout(yaml: string): string[] {
 /** GitHub's default job timeout, in minutes — the value we must not inherit. */
 const GITHUB_DEFAULT_TIMEOUT_MINUTES = 360;
 
-// Trailing comments are legal and used in this repo (claude-code-review.yml
-// writes `timeout-minutes: 30   # true backstop`). Requiring end-of-line after
-// the digits reports a declared timeout as absent — a false FAILURE.
+// Trailing comments are legal YAML and omni-fi-web's workflows use them
+// (claude-code-review.yml writes `timeout-minutes: 30   # true backstop`).
+// Requiring end-of-line after the digits reports a declared timeout as absent —
+// a false FAILURE. This repo has one workflow today; the guard exists for the
+// next one, so it must tolerate the shapes the other repos already write.
 const TIMEOUT_DECLARATION = /^\s*timeout-minutes:\s*(\d+)\s*(?:#.*)?$/m;
 
 const PACKAGE_JSON_PATH = `${import.meta.dir}/../package.json`;
@@ -80,9 +82,9 @@ describe("CI workflow", () => {
 
     expect(
       raw.match(TIMEOUT_DECLARATION),
-      "the CI job must set timeout-minutes — a hung browser test would otherwise " +
-        `hold a runner, and block the merge queue, for GitHub's default ` +
-        `${GITHUB_DEFAULT_TIMEOUT_MINUTES} minutes`,
+      "the CI job must set timeout-minutes — a job that stops making progress " +
+        `would otherwise hold a runner, and block the merge, for GitHub's ` +
+        `default ${GITHUB_DEFAULT_TIMEOUT_MINUTES} minutes`,
     ).not.toBeNull();
   });
 
@@ -199,7 +201,8 @@ describe("CI workflow", () => {
   test("a trailing comment on the declaration still counts as bounded", () => {
     // Regression guard for a bug in this file's own parser: requiring the line
     // to END at the digits reported `timeout-minutes: 30   # note` as missing,
-    // which claude-code-review.yml has written since it was added.
+    // a shape omni-fi-web's claude-code-review.yml has written since it was
+    // added, and one any workflow landing here could write tomorrow.
     expect(
       jobsWithoutTimeout("jobs:\n  a:\n    timeout-minutes: 30   # backstop\n"),
     ).toEqual([]);
