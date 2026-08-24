@@ -28,6 +28,12 @@ const WORKFLOWS_DIR = `${import.meta.dir}/../.github/workflows`;
 const WORKFLOW_PATH = `${WORKFLOWS_DIR}/ci.yml`;
 
 /**
+ * A workflow file. GitHub accepts both extensions, so a sweep that reads only
+ * one leaves a hole the shape of whichever file someone names `.yaml`.
+ */
+const WORKFLOW_FILE = /\.ya?ml$/;
+
+/**
  * A job header: two-space key, optionally followed by a comment. The trailing
  * comment matters twice over — without it a commented key is skipped, AND the
  * inner scan below fails to stop at it and borrows the next job's timeout,
@@ -151,7 +157,7 @@ describe("CI workflow", () => {
     const { readdirSync } = await import("node:fs");
     const offenders: string[] = [];
 
-    for (const file of readdirSync(WORKFLOWS_DIR).filter((f) => f.endsWith(".yml"))) {
+    for (const file of readdirSync(WORKFLOWS_DIR).filter((f) => WORKFLOW_FILE.test(f))) {
       const yaml = await Bun.file(`${WORKFLOWS_DIR}/${file}`).text();
       for (const job of jobsWithoutTimeout(yaml)) offenders.push(`${file}:${job}`);
     }
