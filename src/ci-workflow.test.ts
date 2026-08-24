@@ -153,6 +153,26 @@ describe("CI workflow", () => {
     ).toEqual([]);
   });
 
+  test("a job key with a trailing comment is still inspected", () => {
+    // YAML allows `build:  # note`. The key regex required the line to end at
+    // the colon, so such a job was skipped entirely and reported clean.
+    expect(
+      jobsWithoutTimeout("jobs:\n  build:  # the deploy image\n    runs-on: x\n"),
+    ).toEqual(["build"]);
+  });
+
+  test("an unbounded job cannot BORROW the next job's timeout", () => {
+    // The worse half of the same defect. The inner scan stops at the next job
+    // header; if it cannot recognise one it runs on into that job and finds ITS
+    // timeout-minutes — so a genuinely unbounded job is reported as bounded and
+    // the guard returns green on exactly the workflow it exists to fail.
+    expect(
+      jobsWithoutTimeout(
+        "jobs:\n  first:\n    runs-on: x\n  second:  # note\n    timeout-minutes: 20\n    runs-on: x\n",
+      ),
+    ).toEqual(["first"]);
+  });
+
   test("a trailing comment on the declaration still counts as bounded", () => {
     // Regression guard for a bug in this file's own parser: requiring the line
     // to END at the digits reported `timeout-minutes: 30   # note` as missing,
