@@ -42,34 +42,59 @@ const WORKFLOW_FILE = /\.ya?ml$/;
  */
 const JOB_HEADER = /^ {2}([A-Za-z0-9_-]+):\s*(?:#.*)?$/;
 
-/** Job keys under `jobs:` that declare no `timeout-minutes` of their own. */
-function jobsWithoutTimeout(yaml: string): string[] {
+/**
+ * A job's own `timeout-minutes`: four-space indent, optionally followed by a
+ * comment. Trailing comments are legal YAML and omni-fi-web's
+ * claude-code-review.yml writes `timeout-minutes: 30   # true backstop` —
+ * requiring end-of-line after the digits reports a declared timeout as absent,
+ * which is a false FAILURE.
+ */
+const JOB_TIMEOUT = /^ {4}timeout-minutes:\s*(\d+)\s*(?:#.*)?$/;
+
+/**
+ * Every job under `jobs:`, mapped to the timeout it declares — `null` where it
+ * declares none. One scan, three callers. Asking for a NAMED job's bound is
+ * what stops an assertion from matching the first `timeout-minutes` anywhere in
+ * the file and reporting a neighbouring job's value as this one's.
+ */
+function jobTimeouts(yaml: string): Map<string, number | null> {
   const lines = yaml.split("\n");
+  const timeouts = new Map<string, number | null>();
   const start = lines.findIndex((l) => /^jobs:/.test(l));
-  if (start < 0) return [];
-  const missing: string[] = [];
+  if (start < 0) return timeouts;
   for (let i = start + 1; i < lines.length; i++) {
     const job = lines[i].match(JOB_HEADER);
     if (!job) continue;
     // Scan this job's own keys (4-space indent) until the next job starts.
-    let bounded = false;
+    let minutes: number | null = null;
     for (let j = i + 1; j < lines.length && !JOB_HEADER.test(lines[j]); j++) {
-      if (/^ {4}timeout-minutes:\s*\d+\s*(?:#.*)?$/.test(lines[j])) { bounded = true; break; }
+      const declared = lines[j].match(JOB_TIMEOUT);
+      if (declared) { minutes = Number(declared[1]); break; }
     }
-    if (!bounded) missing.push(job[1]);
+    timeouts.set(job[1], minutes);
   }
-  return missing;
+  return timeouts;
+}
+
+/** Job keys under `jobs:` that declare no `timeout-minutes` of their own. */
+const jobsWithoutTimeout = (yaml: string): string[] =>
+  [...jobTimeouts(yaml)].filter(([, minutes]) => minutes === null).map(([job]) => job);
+
+/** Every workflow in the directory, as `[filename, text]`. */
+async function workflows(): Promise<[string, string][]> {
+  const { readdirSync } = await import("node:fs");
+  const files = readdirSync(WORKFLOWS_DIR).filter((f) => WORKFLOW_FILE.test(f));
+  return Promise.all(
+    files.map(async (f) => [f, await Bun.file(`${WORKFLOWS_DIR}/${f}`).text()] as [string, string]),
+  );
 }
 
 /** GitHub's default job timeout, in minutes — the value we must not inherit. */
 const GITHUB_DEFAULT_TIMEOUT_MINUTES = 360;
 
-// Trailing comments are legal YAML and omni-fi-web's workflows use them
-// (claude-code-review.yml writes `timeout-minutes: 30   # true backstop`).
-// Requiring end-of-line after the digits reports a declared timeout as absent —
-// a false FAILURE. This repo has one workflow today; the guard exists for the
-// next one, so it must tolerate the shapes the other repos already write.
-const TIMEOUT_DECLARATION = /^\s*timeout-minutes:\s*(\d+)\s*(?:#.*)?$/m;
+
+/** The install line ci.yml must carry. Comment-tolerant for JOB_TIMEOUT's reason. */
+const BUN_VERSION_FILE = /^\s*bun-version-file:\s*package\.json\s*(?:#.*)?$/m;
 
 const PACKAGE_JSON_PATH = `${import.meta.dir}/../package.json`;
 
@@ -77,28 +102,6 @@ const PACKAGE_JSON_PATH = `${import.meta.dir}/../package.json`;
 const minorOf = (version: string) => version.split(".").slice(0, 2).join(".");
 
 describe("CI workflow", () => {
-  test("the CI job declares a timeout-minutes", async () => {
-    const raw = await Bun.file(WORKFLOW_PATH).text();
-
-    expect(
-      raw.match(TIMEOUT_DECLARATION),
-      "the CI job must set timeout-minutes — a job that stops making progress " +
-        `would otherwise hold a runner, and block the merge, for GitHub's ` +
-        `default ${GITHUB_DEFAULT_TIMEOUT_MINUTES} minutes`,
-    ).not.toBeNull();
-  });
-
-  test("the timeout is short enough to be worth having", async () => {
-    const raw = await Bun.file(WORKFLOW_PATH).text();
-    const minutes = Number(raw.match(TIMEOUT_DECLARATION)?.[1]);
-
-    // A generous multiple of the ~3 minutes this job actually takes, and far
-    // below the default it replaces. A timeout near the default is the same
-    // problem with extra steps.
-    expect(minutes).toBeGreaterThan(0);
-    expect(minutes).toBeLessThan(GITHUB_DEFAULT_TIMEOUT_MINUTES / 4);
-  });
-
   /**
    * Bun does not enforce its own version pin. Measured on 1.3.14: with
    * `packageManager: "bun@1.0.0"` AND a `.bun-version` of 1.0.0, `bun --version`
@@ -128,7 +131,7 @@ describe("CI workflow", () => {
       "ci.yml must not hardcode bun-version — use bun-version-file: package.json",
     ).toBeNull();
     expect(
-      raw.match(/^\s*bun-version-file:\s*package\.json\s*$/m),
+      raw.match(BUN_VERSION_FILE),
       "ci.yml must install bun from package.json",
     ).not.toBeNull();
   });
@@ -156,17 +159,34 @@ describe("CI workflow", () => {
     // a stalled CloudFront invalidation outlasts a stuck test suite easily, and
     // deploy runs on push to staging. Asserting the whole directory means the
     // next workflow added cannot quietly reintroduce the 360-minute default.
-    const { readdirSync } = await import("node:fs");
     const offenders: string[] = [];
-
-    for (const file of readdirSync(WORKFLOWS_DIR).filter((f) => WORKFLOW_FILE.test(f))) {
-      const yaml = await Bun.file(`${WORKFLOWS_DIR}/${file}`).text();
+    for (const [file, yaml] of await workflows()) {
       for (const job of jobsWithoutTimeout(yaml)) offenders.push(`${file}:${job}`);
     }
 
     expect(
       offenders,
       "these jobs inherit GitHub's 360-minute default — add timeout-minutes",
+    ).toEqual([]);
+  });
+
+  test("EVERY declared bound is short enough to be worth having", async () => {
+    // Replaces two CI-job-specific tests that read the FIRST `timeout-minutes`
+    // anywhere in ci.yml, so a neighbouring job's value could satisfy them. Every
+    // job, per job, from the same parser — strictly stronger than what it
+    // replaces, and there is no longer a single-job call site to regress.
+    const tooLong: string[] = [];
+    for (const [file, yaml] of await workflows()) {
+      for (const [job, minutes] of jobTimeouts(yaml)) {
+        if (minutes !== null && minutes >= GITHUB_DEFAULT_TIMEOUT_MINUTES / 4) {
+          tooLong.push(`${file}:${job}=${minutes}`);
+        }
+      }
+    }
+
+    expect(
+      tooLong,
+      "a timeout near GitHub's default is the same problem with extra steps",
     ).toEqual([]);
   });
 
@@ -180,7 +200,7 @@ describe("CI workflow", () => {
     const twoJobs =
       "jobs:\n  lint:\n    timeout-minutes: 5\n    runs-on: x\n  CI:\n    runs-on: x\n";
     expect(jobTimeouts(twoJobs).get("lint")).toBe(5);
-    expect(jobTimeouts(twoJobs).get(CI_JOB)).toBeNull();
+    expect(jobTimeouts(twoJobs).get("CI")).toBeNull();
   });
 
   test("a trailing comment on the bun install line is tolerated", () => {
