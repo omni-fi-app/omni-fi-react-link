@@ -123,6 +123,25 @@ const git = (args: string[]): string | null => {
   }
 };
 
+/**
+ * This checkout's root, or `null` when git cannot answer — no git installed, or
+ * no `.git` at all (a tarball, a Docker `COPY` that omitted it).
+ *
+ * Resolved at MODULE scope so the line-endings test can be DECLARED
+ * conditionally. `test.if(...)` records a real SKIP; a runtime `return` records
+ * a PASS indistinguishable from "ran, and the tree is clean" — and a guard that
+ * reports green without running is the exact failure that test was rewritten to
+ * escape. `Bun.spawnSync` is synchronous, so the answer exists in time.
+ */
+const GIT_ROOT = git(["-C", import.meta.dir, "rev-parse", "--show-toplevel"]);
+
+if (GIT_ROOT === null) {
+  // The SKIP says it did not run; this says why.
+  console.warn(
+    "[line endings] not a git checkout — this working tree was not inspected.",
+  );
+}
+
 describe("CI workflow", () => {
   /**
    * Bun does not enforce its own version pin. Measured on 1.3.14: with
@@ -244,74 +263,79 @@ describe("CI workflow", () => {
     ).toEqual(["ci.yml", "deploy.yaml"]);
   });
 
-  test("this working tree has LF line endings, as .gitattributes requires", () => {
-    // `.gitattributes` (`* text=auto eol=lf`) governs FUTURE checkouts. It does
-    // not rewrite a tree you already have, so anyone who cloned before it
-    // landed — or who has `core.autocrlf=true` and pulled — silently keeps CRLF
-    // files, and every text-parsing guard here goes subtly wrong for them alone
-    // while CI stays green, because Linux checks out LF.
-    //
-    // This asks GIT rather than reading a file, and that distinction is the
-    // whole point. The first version of this test read its OWN source and
-    // asserted no carriage return. That cannot work: the file is NEW, so a
-    // stale CRLF tree receives a FRESH, LF copy of it on pull while every
-    // pre-existing file stays CRLF — measured, the self-probe reported green on
-    // a tree that was CRLF throughout. It was a guard that could not fire for
-    // the one population it existed to catch.
-    //
-    // Anchored to THIS file's directory, not the process cwd: the question is
-    // about the checkout the test lives in, and `bun test` can be run from
-    // anywhere — including, in a worktree layout, a sibling repo.
-    const root = git(["-C", import.meta.dir, "rev-parse", "--show-toplevel"]);
-    const listing = root === null ? null : git(["-C", root, "ls-files", "--eol"]);
-    if (listing === null) {
-      // Announced, not swallowed. A bare `return` records a PASS, which reads
-      // identically to "ran, and the tree is clean" — and a guard that silently
-      // does not run is the exact failure this test was rewritten to escape.
-      console.warn(
-        "[line endings] SKIPPED: not a git checkout (a tarball, or a Docker " +
-          "COPY without `.git`). This working tree was not inspected.",
-      );
-      return;
-    }
+  test.if(GIT_ROOT !== null)(
+    "this working tree has LF line endings, as .gitattributes requires",
+    () => {
+      // `.gitattributes` (`* text=auto eol=lf`) governs FUTURE checkouts. It does
+      // not rewrite a tree you already have, so anyone who cloned before it
+      // landed — or who has `core.autocrlf=true` and pulled — silently keeps CRLF
+      // files, and every text-parsing guard here goes subtly wrong for them alone
+      // while CI stays green, because Linux checks out LF.
+      //
+      // This asks GIT rather than reading a file, and that distinction is the
+      // whole point. The first version of this test read its OWN source and
+      // asserted no carriage return. That cannot work: the file is NEW, so a
+      // stale CRLF tree receives a FRESH, LF copy of it on pull while every
+      // pre-existing file stays CRLF — measured, the self-probe reported green on
+      // a tree that was CRLF throughout. It was a guard that could not fire for
+      // the one population it existed to catch.
+      //
+      // Anchored to THIS file's directory, not the process cwd: the question is
+      // about the checkout the test lives in, and `bun test` can be run from
+      // anywhere — including, in a worktree layout, a sibling repo.
+      const listing = git(["-C", GIT_ROOT as string, "ls-files", "--eol"]);
+      // git resolved the root moments ago, so a failure HERE is a real fault
+      // rather than the absence the skip covers. Assert instead of skipping.
+      expect(
+        listing,
+        "`git ls-files --eol` failed inside a checkout git had just resolved.",
+      ).not.toBeNull();
 
-    const lines = listing.split("\n").filter((line) => line.length > 0);
+      // Split on either terminator. git emits LF — but this file exists because a
+      // bare `\n` split is precisely how CR contamination gets in, and writing
+      // the guard against it that way would be the joke telling itself.
+      const lines = (listing as string).split(/\r?\n/).filter((line) => line.length > 0);
 
-    // `i/<index>  w/<worktree>  attr/<attrs><TAB><path>`. If a line carries no
-    // tab the format has changed under us, and every predicate below would
-    // quietly match nothing — so fail rather than report a clean tree.
-    expect(
-      lines.filter((line) => !line.includes("\t")),
-      "`git ls-files --eol` is no longer `<attrs><TAB><path>`, so this check " +
-        "cannot answer. Reporting a clean tree here would be a guess.",
-    ).toEqual([]);
+      // `i/<index>  w/<worktree>  attr/<attrs><TAB><path>`. If a line carries no
+      // tab the format has changed under us, and every predicate below would
+      // quietly match nothing — so fail rather than report a clean tree.
+      expect(
+        lines.filter((line) => !line.includes("\t")),
+        "`git ls-files --eol` is no longer `<attrs><TAB><path>`, so this check " +
+          "cannot answer. Reporting a clean tree here would be a guess.",
+      ).toEqual([]);
 
-    // Only `w/` is the tree's actual state — `i/` is the blob's, which is LF
-    // here regardless. Binaries report `w/none` and never match. An explicit
-    // `eol=crlf` attribute would make CRLF the correct answer for that file;
-    // nothing sets one in any of these repos today, and honouring it costs one
-    // predicate.
-    const crlf = lines
-      .map((line) => {
-        const tab = line.indexOf("\t");
-        return { meta: line.slice(0, tab), path: line.slice(tab + 1) };
-      })
-      .filter(({ meta }) => meta.includes("w/crlf") && !meta.includes("eol=crlf"))
-      .map(({ path }) => path);
+      // Only `w/` is the tree's actual state — `i/` is the blob's, which is LF
+      // here regardless. Binaries report `w/none` and never match. An explicit
+      // `eol=crlf` attribute would make CRLF the correct answer for that file;
+      // nothing sets one in any of these repos today, and honouring it costs one
+      // predicate.
+      const crlf = lines
+        .map((line) => {
+          const tab = line.indexOf("\t");
+          return { meta: line.slice(0, tab), path: line.slice(tab + 1) };
+        })
+        // `w/mixed` counts as well as `w/crlf`. A file only PARTLY converted —
+        // a refresh interrupted, an editor that saved CRLF into one file — is
+        // still contaminated, and a line-oriented parser breaks on exactly the
+        // affected lines. Matching `w/crlf` alone passes a half-fixed tree.
+        .filter(({ meta }) => /w\/(crlf|mixed)/.test(meta) && !meta.includes("eol=crlf"))
+        .map(({ path }) => path);
 
-    expect(
-      crlf.length,
-      `${crlf.length} tracked file(s) are CRLF in this working tree` +
-        (crlf.length > 0 ? ` — e.g. ${crlf.slice(0, 5).join(", ")}` : "") +
-        ".\n\n" +
-        "`.gitattributes` asks for LF, but it only governs future checkouts — " +
-        "it cannot rewrite a tree you already have. Commit or stash first (the " +
-        "next command DISCARDS uncommitted work), then:\n\n" +
-        "    git rm --cached -r . && git reset --hard\n\n" +
-        "`git add --renormalize .` will NOT do it — that updates the index, " +
-        "and the index here is already LF.",
-    ).toBe(0);
-  });
+      expect(
+        crlf.length,
+        `${crlf.length} tracked file(s) carry CRLF line endings, whole or partial` +
+          (crlf.length > 0 ? ` — e.g. ${crlf.slice(0, 5).join(", ")}` : "") +
+          ".\n\n" +
+          "`.gitattributes` asks for LF, but it only governs future checkouts — " +
+          "it cannot rewrite a tree you already have. Commit or stash first (the " +
+          "next command DISCARDS uncommitted work), then:\n\n" +
+          "    git rm --cached -r . && git reset --hard\n\n" +
+          "`git add --renormalize .` will NOT do it — that updates the index, " +
+          "and the index here is already LF.",
+      ).toBe(0);
+    },
+  );
 
   test("a CRLF checkout does not reopen the BORROW hole", () => {
     // `\r` as an ESCAPE, not a literal carriage return, so this fixture means
