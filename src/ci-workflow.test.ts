@@ -288,7 +288,9 @@ describe("CI workflow", () => {
       // rather than the absence the skip covers. Assert instead of skipping.
       expect(
         listing,
-        "`git ls-files --eol` failed inside a checkout git had just resolved.",
+        "`git ls-files --eol` failed in a checkout git had just resolved. The " +
+        "likely cause is a git too old for `--eol`; a skip here would hide " +
+        "an uninspected tree, which is the failure this guard exists to stop.",
       ).not.toBeNull();
 
       // Split on either terminator. git emits LF — but this file exists because a
