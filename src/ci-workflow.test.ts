@@ -58,7 +58,12 @@ const JOB_TIMEOUT = /^ {4}timeout-minutes:\s*(\d+)\s*(?:#.*)?$/;
  * the file and reporting a neighbouring job's value as this one's.
  */
 function jobTimeouts(yaml: string): Map<string, number | null> {
-  const lines = yaml.split("\n");
+  // `/\r?\n/`, not `"\n"`: no .gitattributes normalises line endings in this
+  // repo, so a Windows checkout is CRLF and every line would arrive with a
+  // trailing `\r`. `\s` matches CR but `.` does not, so `(?:#.*)?$` would fail
+  // on exactly the COMMENTED lines the trailing-comment tolerance exists for —
+  // taking JOB_HEADER with it, and with it the borrow defect. Pinned below.
+  const lines = yaml.split(/\r?\n/);
   const timeouts = new Map<string, number | null>();
   const start = lines.findIndex((l) => /^jobs:/.test(l));
   if (start < 0) return timeouts;
@@ -220,6 +225,32 @@ describe("CI workflow", () => {
     expect(
       ["ci.yml", "deploy.yaml", "README.md"].filter((f) => WORKFLOW_FILE.test(f)),
     ).toEqual(["ci.yml", "deploy.yaml"]);
+  });
+
+  test("a CRLF checkout does not reopen the BORROW hole", () => {
+    // `\r` as an ESCAPE, not a literal carriage return, so this fixture means
+    // the same thing however this very file is checked out.
+    //
+    // Windows checkouts get CRLF (no .gitattributes normalises it, and
+    // core.autocrlf=true is the default there), and `.` does not match `\r` in
+    // JS while `\s` does. So `\s*$` absorbs the CR and matches, but
+    // `(?:#.*)?$` does not — which breaks precisely the COMMENTED lines the
+    // trailing-comment tolerance exists for, and leaves the uncommented ones
+    // working. Both JOB_HEADER and JOB_TIMEOUT inherit it.
+    //
+    // The consequence is the borrow defect verbatim: an unrecognised job header
+    // fails to terminate the inner scan, which runs on into the next job and
+    // reports a genuinely unbounded job as bounded. Every other fixture here is
+    // an LF literal, so none of them can reach this path.
+    const crlf = [
+      "jobs:",
+      "  first:",
+      "    runs-on: x",
+      "  second:  # note",
+      "    timeout-minutes: 20",
+      "    runs-on: x",
+    ].join("\r\n");
+    expect(jobsWithoutTimeout(crlf)).toEqual(["first"]);
   });
 
   test("a job key with a trailing comment is still inspected", () => {
