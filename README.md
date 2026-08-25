@@ -563,6 +563,26 @@ Run tests with:
 bun test
 ```
 
+### Line endings (Windows)
+
+This repo normalises to **LF** on every platform via `.gitattributes`
+(`* text=auto eol=lf`). Several tests parse workflow files as plain text, and a
+CRLF working tree makes them fail in ways that look like product bugs rather
+than checkout problems.
+
+`.gitattributes` only governs **future** checkouts — it cannot rewrite a tree you
+already have. If you cloned before it landed, or you have `core.autocrlf=true`,
+refresh once:
+
+```bash
+# ⚠️ Commit or stash first — `reset --hard` DISCARDS uncommitted work.
+git rm --cached -r . && git reset --hard
+```
+
+`git add --renormalize .` will *not* do it: that updates the index, and the index
+here is already LF. The `bun test` suite checks this and will tell you if your
+tree still needs the refresh, so you do not have to remember.
+
 ---
 
 ## License
