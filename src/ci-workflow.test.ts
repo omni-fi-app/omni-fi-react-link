@@ -227,6 +227,39 @@ describe("CI workflow", () => {
     ).toEqual(["ci.yml", "deploy.yaml"]);
   });
 
+  test("this working tree has LF line endings, as .gitattributes requires", async () => {
+    // Self-enforcing, and it has to be: `.gitattributes` governs FUTURE
+    // checkouts, so adding `* text=auto eol=lf` does NOT rewrite a working tree
+    // that is already CRLF. Someone who cloned before it landed — or who has
+    // `core.autocrlf=true` and pulled — keeps CRLF files silently, and every
+    // text-parsing guard in this repo goes subtly wrong for them alone while CI
+    // stays green, because Linux checks out LF. That is the exact shape of the
+    // bug this whole change exists to remove.
+    //
+    // A README note cannot help, because the reader does not know they have the
+    // problem. This test tells them at the moment it matters, once, with the
+    // command.
+    //
+    // Reads its OWN source: if this file survived a checkout with its LF
+    // intact, the attribute is applied and the tree is clean. Note the CRLF
+    // fixtures elsewhere in this file spell `\r` as an ESCAPE, so the source
+    // itself contains no carriage return — an actual CR here means the tree,
+    // not the fixture.
+    const source = await Bun.file(import.meta.path).text();
+    const carriageReturns = (source.match(/\r/g) ?? []).length;
+
+    expect(
+      carriageReturns,
+      "This checkout has CRLF line endings. `.gitattributes` asks for LF, but " +
+        "it only governs future checkouts — it cannot rewrite a tree you already " +
+        "have. Commit or stash first (the next command DISCARDS uncommitted " +
+        "work), then:\n\n" +
+        "    git rm --cached -r . && git reset --hard\n\n" +
+        "`git add --renormalize .` will NOT do it — that updates the index, and " +
+        "the index here is already LF.",
+    ).toBe(0);
+  });
+
   test("a CRLF checkout does not reopen the BORROW hole", () => {
     // `\r` as an ESCAPE, not a literal carriage return, so this fixture means
     // the same thing however this very file is checked out.
