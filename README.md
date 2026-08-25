@@ -580,8 +580,9 @@ git rm --cached -r . && git reset --hard
 ```
 
 `git add --renormalize .` will *not* do it: that updates the index, and the index
-here is already LF. The `bun test` suite checks this and will tell you if your
-tree still needs the refresh, so you do not have to remember.
+here is already LF. The `bun test` suite asks git about every tracked file and
+will tell you if your tree still needs the refresh, so you do not have to
+remember — and it names the files, so a partial refresh is visible too.
 
 ---
 
