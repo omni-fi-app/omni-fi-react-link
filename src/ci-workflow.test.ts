@@ -263,18 +263,35 @@ describe("CI workflow", () => {
     // about the checkout the test lives in, and `bun test` can be run from
     // anywhere — including, in a worktree layout, a sibling repo.
     const root = git(["-C", import.meta.dir, "rev-parse", "--show-toplevel"]);
-    if (root === null) return;
-    const listing = git(["-C", root, "ls-files", "--eol"]);
-    if (listing === null) return;
+    const listing = root === null ? null : git(["-C", root, "ls-files", "--eol"]);
+    if (listing === null) {
+      // Announced, not swallowed. A bare `return` records a PASS, which reads
+      // identically to "ran, and the tree is clean" — and a guard that silently
+      // does not run is the exact failure this test was rewritten to escape.
+      console.warn(
+        "[line endings] SKIPPED: not a git checkout (a tarball, or a Docker " +
+          "COPY without `.git`). This working tree was not inspected.",
+      );
+      return;
+    }
 
-    // `i/<index>  w/<worktree>  attr/<attrs><TAB><path>`. Only `w/` is the
-    // tree's actual state — `i/` is the blob's, which is LF here regardless.
-    // Binaries report `w/none` and never match. An explicit `eol=crlf`
-    // attribute would make CRLF the correct answer for that file; nothing sets
-    // one in any of these repos today, and honouring it costs one predicate.
-    const crlf = listing
-      .split("\n")
-      .filter((line) => line.length > 0)
+    const lines = listing.split("\n").filter((line) => line.length > 0);
+
+    // `i/<index>  w/<worktree>  attr/<attrs><TAB><path>`. If a line carries no
+    // tab the format has changed under us, and every predicate below would
+    // quietly match nothing — so fail rather than report a clean tree.
+    expect(
+      lines.filter((line) => !line.includes("\t")),
+      "`git ls-files --eol` is no longer `<attrs><TAB><path>`, so this check " +
+        "cannot answer. Reporting a clean tree here would be a guess.",
+    ).toEqual([]);
+
+    // Only `w/` is the tree's actual state — `i/` is the blob's, which is LF
+    // here regardless. Binaries report `w/none` and never match. An explicit
+    // `eol=crlf` attribute would make CRLF the correct answer for that file;
+    // nothing sets one in any of these repos today, and honouring it costs one
+    // predicate.
+    const crlf = lines
       .map((line) => {
         const tab = line.indexOf("\t");
         return { meta: line.slice(0, tab), path: line.slice(tab + 1) };
