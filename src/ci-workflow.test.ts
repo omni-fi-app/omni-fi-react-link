@@ -330,8 +330,14 @@ describe("CI workflow", () => {
           (crlf.length > 0 ? ` — e.g. ${crlf.slice(0, 5).join(", ")}` : "") +
           ".\n\n" +
           "`.gitattributes` asks for LF, but it only governs future checkouts — " +
-          "it cannot rewrite a tree you already have. Commit or stash first (the " +
-          "next command DISCARDS uncommitted work), then:\n\n" +
+          "it cannot rewrite a tree you already have.\n\n" +
+          "FIRST make sure you are on a branch that CONTAINS `.gitattributes`. " +
+          "The refresh below re-checks-out every tracked file, and on a branch " +
+          "WITHOUT the attribute that writes CRLF everywhere — measured at 17 " +
+          "files becoming 1903. `git pull` updates only the current branch, so " +
+          "a local `staging` can be days stale:\n\n" +
+          "    git switch staging && git merge --ff-only origin/staging\n\n" +
+          "THEN commit or stash — the next command DISCARDS uncommitted work:\n\n" +
           "    git rm --cached -r . && git reset --hard\n\n" +
           "`git add --renormalize .` will NOT do it — that updates the index, " +
           "and the index here is already LF.",

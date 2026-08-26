@@ -575,7 +575,13 @@ already have. If you cloned before it landed, or you have `core.autocrlf=true`,
 refresh once:
 
 ```bash
-# ⚠️ Commit or stash first — `reset --hard` DISCARDS uncommitted work.
+# 1. Be on a branch that CONTAINS .gitattributes. The refresh below re-checks-out
+#    every tracked file, so on a branch WITHOUT it you get CRLF everywhere —
+#    measured at 17 files becoming 1903. `git pull` updates only the current
+#    branch, so a local `main` can be days stale.
+git switch main && git merge --ff-only origin/main
+
+# 2. ⚠️ Commit or stash first — `reset --hard` DISCARDS uncommitted work.
 git rm --cached -r . && git reset --hard
 ```
 
