@@ -114,11 +114,21 @@ const minorOf = (version: string) => version.split(".").slice(0, 2).join(".");
  * tarball, or a Docker `COPY` that omitted `.git`. Neither is a working tree
  * anyone can fix, so the caller skips rather than failing a build over it.
  */
+/**
+ * What git last said when it failed. Kept because the caller below asserts on a
+ * failure it cannot otherwise explain: discarding stderr and then GUESSING at
+ * the cause is how a diagnostic message ends up pointing away from the problem.
+ */
+let lastGitError = "";
+
 const git = (args: string[]): string | null => {
   try {
     const run = Bun.spawnSync(["git", ...args], { stdout: "pipe", stderr: "pipe" });
-    return run.exitCode === 0 ? run.stdout.toString().trim() : null;
-  } catch {
+    if (run.exitCode === 0) return run.stdout.toString().trim();
+    lastGitError = run.stderr.toString().trim();
+    return null;
+  } catch (cause) {
+    lastGitError = String(cause);
     return null;
   }
 };
@@ -288,9 +298,11 @@ describe("CI workflow", () => {
       // rather than the absence the skip covers. Assert instead of skipping.
       expect(
         listing,
-        "`git ls-files --eol` failed in a checkout git had just resolved. The " +
-        "likely cause is a git too old for `--eol`; a skip here would hide " +
-        "an uninspected tree, which is the failure this guard exists to stop.",
+        "`git ls-files --eol` failed in a checkout git had just resolved.\n\n" +
+        `git said: ${lastGitError || "(nothing on stderr)"}\n\n` +
+        "If that names `--eol` as an unknown option, the git here predates " +
+        "it. Whatever the cause, a skip would hide an uninspected tree — " +
+        "the failure this guard exists to stop.",
       ).not.toBeNull();
 
       // Split on either terminator. git emits LF — but this file exists because a
