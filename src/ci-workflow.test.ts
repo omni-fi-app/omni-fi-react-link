@@ -121,6 +121,17 @@ const minorOf = (version: string) => version.split(".").slice(0, 2).join(".");
  */
 let lastGitError = "";
 
+/**
+ * The branch this repo works from, and therefore the one carrying
+ * `.gitattributes`. `staging` in the private repos; the public SDK has no
+ * `staging` branch at all and works from `main`.
+ *
+ * Named here rather than inlined because the first version of this message
+ * hardcoded `staging` into all of them — a command that simply fails with
+ * "invalid reference" in the one repo an outside contributor can see.
+ */
+const REFRESH_BRANCH = "main";
+
 const git = (args: string[]): string | null => {
   try {
     const run = Bun.spawnSync(["git", ...args], { stdout: "pipe", stderr: "pipe" });
@@ -343,14 +354,19 @@ describe("CI workflow", () => {
           ".\n\n" +
           "`.gitattributes` asks for LF, but it only governs future checkouts — " +
           "it cannot rewrite a tree you already have.\n\n" +
-          "FIRST make sure you are on a branch that CONTAINS `.gitattributes`. " +
-          "The refresh below re-checks-out every tracked file, and on a branch " +
-          "WITHOUT the attribute that writes CRLF everywhere — measured at 17 " +
-          "files becoming 1903. `git pull` updates only the current branch, so " +
-          "a local `staging` can be days stale:\n\n" +
-          "    git switch staging && git merge --ff-only origin/staging\n\n" +
-          "THEN commit or stash — the next command DISCARDS uncommitted work:\n\n" +
-          "    git rm --cached -r . && git reset --hard\n\n" +
+          "1. Commit or stash FIRST. Step 3 discards uncommitted work, and " +
+          "`git switch` carries it onto whatever branch you land on:\n\n" +
+          "       git stash -u\n\n" +
+          "2. Get onto a branch that CONTAINS `.gitattributes`. The refresh " +
+          "re-checks-out every tracked file, and on a branch WITHOUT the " +
+          "attribute that writes CRLF everywhere — measured at 17 files " +
+          "becoming 1903. `git pull` updates only the current branch, so " +
+          `a local \`${REFRESH_BRANCH}\` can be days stale:\n\n` +
+          `       git switch ${REFRESH_BRANCH} && ` +
+          `git merge --ff-only origin/${REFRESH_BRANCH}\n\n` +
+          "3. Refresh the working tree:\n\n" +
+          "       git rm --cached -r . && git reset --hard\n\n" +
+          "4. Return to your branch, and `git stash pop` if you stashed.\n\n" +
           "`git add --renormalize .` will NOT do it — that updates the index, " +
           "and the index here is already LF.",
       ).toBe(0);
