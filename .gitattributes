@@ -14,8 +14,7 @@
 # the COMMENTED lines the guard's trailing-comment tolerance existed for. An
 # unrecognised job header then failed to terminate the scan, which ran into the
 # next job and reported a genuinely unbounded job as bounded. Green on every
-# Linux CI run; broken on Windows. See omni-fi-link#101, omni-fi-web#25,
-# omni-fi-react-link#32.
+# Linux CI run; broken on Windows.
 #
 # Safe as a blanket rule here: no .bat/.cmd/.ps1/.sln exists in any of these
 # repos, so nothing needs CRLF. `text=auto` still detects binaries and leaves
