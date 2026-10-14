@@ -9,7 +9,7 @@
  *
  * The invariant: every job must bound its own runtime. GitHub's default is 360
  * minutes. The stakes are lower here than in omni-fi-web, which is where this
- * guard originated (task 7.50) — that repo's CI gained a Playwright suite, and a
+ * guard originated — that repo's CI gained a Playwright suite, and a
  * hung browser is a far likelier way for a job to stop making progress than
  * anything in this one, which is lint + build + test and fails fast. This repo
  * has no browser suite and no deploy workflow at all.
@@ -202,7 +202,7 @@ describe("CI workflow", () => {
     const pkg = await Bun.file(PACKAGE_JSON_PATH).json();
     const pinned = String(pkg.packageManager).replace(/^bun@/, "");
 
-    // Minor, not exact. The drift this task came from (#16) was filesystem
+    // Minor, not exact. The drift that prompted this was filesystem
     // enumeration order, not a bun release — so failing a developer's whole
     // suite over a patch difference costs more than the risk it covers, and
     // unlike uv this test cannot install the right version for them. A MINOR
@@ -216,8 +216,8 @@ describe("CI workflow", () => {
   });
 
   test("EVERY job in EVERY workflow bounds its own runtime", async () => {
-    // Generalised from the CI job after the omni-fi-link#101 bot review pointed
-    // out that deploy.yml was unbounded for the same reason — a stuck S3 sync or
+    // Generalised from the CI job once omni-fi-link's deploy.yml turned out to
+    // be unbounded for the same reason — a stuck S3 sync or
     // a stalled CloudFront invalidation outlasts a stuck test suite easily, and
     // deploy runs on push to staging. Asserting the whole directory means the
     // next workflow added cannot quietly reintroduce the 360-minute default.
