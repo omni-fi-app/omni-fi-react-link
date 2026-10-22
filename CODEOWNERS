@@ -1,4 +1,4 @@
-# Global ownership: Any PR touching any file requires review from one of these owners.
-# This prevents bottlenecks while maintaining strict quality control.
+# Global ownership: Any PR touching any file requires review from this owner.
+# A single owner covers every path, maintaining strict quality control.
 
-* @GarrickBrown @AlexTgvCGS
+* @GarrickBrown
