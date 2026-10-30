@@ -30,16 +30,10 @@ export const getScriptUrl = (env: OmniFIEnv = "production"): string => {
 };
 
 /**
- * Map an {@link OmniFIEnv} value to the env signal the widget loader
- * (`omni-fi-link/packages/link-loader`) reads from its config payload.
- *
- * The loader's `getBaseUrl()` switches on `"local" | "staging" | "production"`
- * to pick the iframe origin; `"development"` (idiomatic) maps to `"local"`
- * (loader's existing value). `useOmniFILink` calls this internally when
- * forwarding the config to `window.OmniFI.connect()` so the loader sees the
- * same env signal the SDK used for the CDN URL.
- *
- * Pure function. Exhaustive switch with a safety default.
+ * Map an {@link OmniFIEnv} value to the `environment` the widget loader uses
+ * to pick its iframe origin. `useOmniFILink` passes the result to
+ * `window.OmniFI.connect()`, so the iframe comes from the same environment as
+ * the script.
  */
 export const getLoaderEnvironment = (
   env: OmniFIEnv = "production",

@@ -13,13 +13,11 @@ import {
 /**
  * Contract tests: this SDK's public type surface vs the widget's.
  *
- * The widget owns the contract in `omni-fi-link/packages/shared/src/index.ts`
- * (`OmniFILinkedConnection`, `OMNIFI_EVENTS`) and emits terminal error codes
- * from `omni-fi-link/apps/link-app/src/screens/errorUtils.ts`. This SDK only
- * re-declares that surface for TypeScript consumers — `useOmniFILink` spreads
- * the host's config straight into `window.OmniFI.connect()`, so every field
- * the widget posts already arrives at `onSuccess` at runtime whatever these
- * types say.
+ * The widget decides the event names, the connection fields and the error
+ * codes. This SDK only re-declares them for TypeScript consumers —
+ * `useOmniFILink` passes the host's config straight to
+ * `window.OmniFI.connect()`, so every field the widget sends reaches
+ * `onSuccess` at runtime whatever these types say.
  *
  * Which is exactly why the drift was invisible: nothing broke, consumers just
  * had to cast. These tests make the surface assertable.
@@ -31,9 +29,9 @@ import {
  * are written to do so, because a red test is better evidence than a red
  * compile; tests that cannot are annotated to say so.
  *
- * Keeping this file in sync is manual today. The automated check belongs on
- * the widget side rather than here: this package is public and the widget
- * repo is not, so the comparison can only run where both halves are readable.
+ * These types are kept in sync with the widget by hand. An automatic check
+ * would have to run alongside the widget's code, because that code isn't
+ * public.
  */
 
 /** Minimal valid connection — the three fields that are not optional. */
@@ -218,12 +216,11 @@ describe("OmniFIErrorCode — the terminal codes onError actually receives", () 
 describe("onSuccess — the loader/SDK boundary", () => {
   // The one place the SDK is NOT a passthrough, and it has to not be.
   //
-  // The loader calls `onSuccess(data.connections)` with the bare array
-  // (`packages/link-loader/src/index.ts`), while this SDK's documented API —
-  // every example in the README and the hosted docs — is
-  // `onSuccess({ connections })`. Something has to adapt, and it is the SDK:
-  // the loader's shape is what existing vanilla-JS integrators already rely on,
-  // so it cannot change without breaking them.
+  // The loader calls `onSuccess(data.connections)` with the bare array, while
+  // this SDK's documented API — every example in the README and the hosted
+  // docs — is `onSuccess({ connections })`. Something has to adapt, and it is
+  // the SDK: the loader's shape is what existing vanilla-JS integrators
+  // already rely on, so it cannot change without breaking them.
   //
   // Guarded here rather than only in the hook's own tests, because the failure
   // is silent: a host destructuring `{ connections }` off an array gets
@@ -260,7 +257,7 @@ describe("onSuccess — the loader/SDK boundary", () => {
 describe("OmniFIErrorCode — extensible, not exhaustive", () => {
   // The widget posts `errorType` verbatim, and `errorType` can carry any
   // `Error.Type` the BACKEND stamps on a job — including document-pipeline
-  // codes that exist only in omni-fi-core and are invisible to this package.
+  // codes that exist only on the server and are invisible to this package.
   // Four separate enumerations of "every reachable code" produced four
   // different answers, so the union names what we know without claiming the
   // set is closed. A host's `default:` branch stays reachable, as it must.

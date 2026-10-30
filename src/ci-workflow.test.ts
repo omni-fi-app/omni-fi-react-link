@@ -1,22 +1,14 @@
 /**
- * ci-workflow.test.ts — invariants of the workflows that nothing else checks.
+ * Checks on the GitHub workflows that nothing else covers.
  *
- * Reads `.github/workflows/*.yml` as PLAIN TEXT rather than through a YAML
- * parser, following omni-fi-core's `TestCIFernGate`: the only YAML parser
- * reachable here is a transitive dependency of another tool, and a guard that
- * silently stops running when its parser goes missing reproduces the class of
- * failure it exists to prevent.
+ * Reads `.github/workflows/*.yml` as plain text instead of parsing the YAML.
+ * The only YAML parser available here comes in as a dependency of another
+ * tool; if it went away, these tests would quietly stop working.
  *
- * The invariant: every job must bound its own runtime. GitHub's default is 360
- * minutes. The stakes are lower here than in omni-fi-web, which is where this
- * guard originated — that repo's CI gained a Playwright suite, and a
- * hung browser is a far likelier way for a job to stop making progress than
- * anything in this one, which is lint + build + test and fails fast. This repo
- * has no browser suite and no deploy workflow at all.
- *
- * It is here anyway because `CI` is the required status check, so a hung job
- * holds the merge as well as the runner, and because the guard is what stops the
- * NEXT workflow added here from quietly inheriting the default.
+ * The main check: every job must set `timeout-minutes`. Without it, GitHub
+ * lets a stuck job run for 6 hours, and since CI is a required check, it blocks
+ * merging the whole time. Today's jobs finish quickly; the check is for the
+ * next workflow someone adds.
  *
  * `concurrency.cancel-in-progress` bounds this for a branch someone pushes to
  * again. It does nothing for a PR that is opened and left.
@@ -43,11 +35,9 @@ const WORKFLOW_FILE = /\.ya?ml$/;
 const JOB_HEADER = /^ {2}([A-Za-z0-9_-]+):\s*(?:#.*)?$/;
 
 /**
- * A job's own `timeout-minutes`: four-space indent, optionally followed by a
- * comment. Trailing comments are legal YAML and omni-fi-web's
- * claude-code-review.yml writes `timeout-minutes: 30   # true backstop` —
- * requiring end-of-line after the digits reports a declared timeout as absent,
- * which is a false FAILURE.
+ * A job's own `timeout-minutes`, indented four spaces. A comment after the
+ * number is allowed, since `timeout-minutes: 30  # backstop` is valid YAML and
+ * the timeout is still set.
  */
 const JOB_TIMEOUT = /^ {4}timeout-minutes:\s*(\d+)\s*(?:#.*)?$/;
 
@@ -172,10 +162,8 @@ describe("CI workflow", () => {
    * nothing in the toolchain closes this loop — so the declaration binds CI, and
    * these tests are what make it mean anything locally.
    *
-   * `packageManager` rather than `.bun-version` because omni-fi-link and
-   * omni-fi-react-link already declare it, and link's deploy.yml already
-   * installs from it. Neither file is honoured by bun itself, so consistency
-   * with what exists decides it.
+   * `packageManager`, not `.bun-version`, because this repo and the widget
+   * already declare it. Bun ignores both files.
    */
   test("the bun version has a single source of truth", async () => {
     const raw = await Bun.file(WORKFLOW_PATH).text();
@@ -216,11 +204,8 @@ describe("CI workflow", () => {
   });
 
   test("EVERY job in EVERY workflow bounds its own runtime", async () => {
-    // Generalised from the CI job once omni-fi-link's deploy.yml turned out to
-    // be unbounded for the same reason — a stuck S3 sync or
-    // a stalled CloudFront invalidation outlasts a stuck test suite easily, and
-    // deploy runs on push to staging. Asserting the whole directory means the
-    // next workflow added cannot quietly reintroduce the 360-minute default.
+    // Checks every workflow file, not just ci.yml, so a workflow added later
+    // can't leave out its timeout.
     const offenders: string[] = [];
     for (const [file, yaml] of await workflows()) {
       for (const job of jobsWithoutTimeout(yaml)) offenders.push(`${file}:${job}`);
@@ -420,10 +405,7 @@ describe("CI workflow", () => {
   });
 
   test("a trailing comment on the declaration still counts as bounded", () => {
-    // Regression guard for a bug in this file's own parser: requiring the line
-    // to END at the digits reported `timeout-minutes: 30   # note` as missing,
-    // a shape omni-fi-web's claude-code-review.yml has written since it was
-    // added, and one any workflow landing here could write tomorrow.
+    // The parser used to treat a timeout followed by a comment as missing.
     expect(
       jobsWithoutTimeout("jobs:\n  a:\n    timeout-minutes: 30   # backstop\n"),
     ).toEqual([]);

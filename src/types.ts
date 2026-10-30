@@ -1,5 +1,5 @@
 // Strictly typed events the hosted widget emits via postMessage.
-// Order and keys mirror `packages/shared/src/index.ts` in omni-fi-link verbatim.
+// Keys and values mirror the event names the hosted widget posts.
 export const OMNIFI_EVENTS = {
   SUCCESS: "omni-fi:success",
   ERROR: "omni-fi:error",
@@ -110,7 +110,7 @@ export type OmniFIKnownErrorCode =
  * **Deliberately open.** The widget posts its `errorType` verbatim, and that
  * value can originate in the backend — the document pipeline alone contributes
  * codes (`DOCUMENT_NOT_BANK_STATEMENT`, `DOCUMENT_RECONCILIATION_FAILED`, …)
- * that exist only in omni-fi-core and can never be enumerated from this
+ * that exist only on the server and can never be enumerated from this
  * package. Four separate attempts to list "every reachable code" produced four
  * different answers.
  *
@@ -149,8 +149,7 @@ export interface OmniFIConnection {
   institutionId: string;
   /**
    * Optional — the widget can emit the `connection-linked` event before
-   * `customerType` is resolved. Matches `OmniFILinkedConnection.customerType`
-   * in `omni-fi-link/packages/shared`.
+   * `customerType` is resolved. Matches the widget's own `customerType`.
    */
   customerType?: "personal" | "business";
   /**
@@ -164,10 +163,9 @@ export interface OmniFIConnection {
    *   so `source === undefined` is the implicit login/scrape case.
    *
    * Use this to discriminate uploaded vs logged-in connections in a mixed-mode
-   * session (a single `onSuccess` payload can contain both). Mirrors
-   * `OmniFILinkedConnection.source` in `omni-fi-link/packages/shared` (the wire
-   * contract); the union may gain variants in future releases, so treat any
-   * non-`"DOCUMENT_UPLOAD"` / absent value as login.
+   * session (a single `onSuccess` payload can contain both). Mirrors the
+   * `source` field the widget posts; the union may gain variants in future
+   * releases, so treat any non-`"DOCUMENT_UPLOAD"` / absent value as login.
    */
   source?: "DOCUMENT_UPLOAD";
   /**
@@ -180,8 +178,7 @@ export interface OmniFIConnection {
   permittedAccountIds?: string[];
   /**
    * The institution's full legal name (e.g. `"The Mauritius Commercial Bank
-   * Ltd"`). Mirrors `OmniFILinkedConnection.institutionName` in
-   * `omni-fi-link/packages/shared`.
+   * Ltd"`). Mirrors the `institutionName` field the widget posts.
    *
    * Prefer `institutionNameShort` for anything user-facing — see below.
    */
@@ -244,7 +241,7 @@ export type OmniFIConnectionLinkedPayload = OmniFIConnection;
 
 /**
  * Canonical lowercase MFA challenge types returned by the connect/sync engine.
- * Mirrors `OmniFIMfaType` in `omni-fi-link/packages/shared`.
+ * The same values the widget uses.
  *
  * The hosted widget handles the MFA challenge internally today and does **not**
  * surface a typed `mfa-challenge` event to SDK consumers. This union is
@@ -320,12 +317,9 @@ export interface OmniFIInstance {
 }
 
 /**
- * Shape of the config payload the widget loader
- * (`omni-fi-link/packages/link-loader`) actually consumes. The loader reads
- * `environment` (values: `"local" | "staging" | "production"`) to pick its
- * iframe origin. `useOmniFILink` derives this from the SDK's public `env`
- * field via `getLoaderEnvironment` and passes the augmented object to
- * `window.OmniFI.connect()`.
+ * Shape of the config payload the widget loader actually consumes.
+ * `useOmniFILink` sets `environment` from the SDK's public `env` field via
+ * `getLoaderEnvironment` and passes the result to `window.OmniFI.connect()`.
  *
  * Module-local — not part of the SDK's public consumer-facing surface.
  */
@@ -333,11 +327,11 @@ export interface OmniFIInstance {
  * What `window.OmniFI.connect()` actually accepts — NOT the same shape a host
  * passes to `useOmniFILink`, in one specific and load-bearing way.
  *
- * The loader invokes `onSuccess(data.connections)` with the bare ARRAY
- * (`packages/link-loader/src/index.ts`), while this SDK's documented API is
- * `onSuccess({ connections })`. `useOmniFILink` adapts between the two. Left
- * unadapted, a host destructuring `{ connections }` off an array would get
- * `undefined` and silently never see its connections.
+ * The loader invokes `onSuccess(data.connections)` with the bare ARRAY, while
+ * this SDK's documented API is `onSuccess({ connections })`. `useOmniFILink`
+ * adapts between the two. Left unadapted, a host destructuring
+ * `{ connections }` off an array would get `undefined` and silently never see
+ * its connections.
  *
  * The loader's shape is the one that cannot move: vanilla-JS integrators call
  * it directly and already depend on it.
