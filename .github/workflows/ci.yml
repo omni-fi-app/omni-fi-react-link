@@ -14,12 +14,8 @@ jobs:
   CI:
     name: CI
     runs-on: ubuntu-latest
-    # Bounded rather than inheriting GitHub's 360-minute default. Lower stakes
-    # here than in omni-fi-web, which gained a browser suite — this job is lint +
-    # build + test, all fail-fast — but `CI` is the required status check, so a
-    # hung job holds the merge as well as the runner. `cancel-in-progress` covers
-    # a branch that gets pushed again; nothing covers a PR left open.
-    # Guarded by src/ci-workflow.test.ts.
+    # Without a limit, a stuck job runs for GitHub's default of 6 hours, and
+    # since CI is a required check, it blocks merging the whole time.
     timeout-minutes: 15
     permissions:
       contents: read

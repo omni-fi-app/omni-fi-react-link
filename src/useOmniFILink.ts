@@ -144,24 +144,19 @@ export function useOmniFILink(config: OmniFIConfig): UseOmniFILinkResult {
     // Destroy any existing widget instance before opening a new one
     instanceRef.current?.destroy();
 
-    // The widget loader (omni-fi-link/packages/link-loader) reads
-    // `environment` ("local" | "staging" | "production") to pick its
-    // iframe origin. Use the SNAPSHOT captured at script-load time so the
-    // iframe origin always matches the script that's on the page —
-    // changing `config.env` between mount and `open()` does not cause a
-    // mismatch. Falls back to 'production' if `open()` is somehow called
-    // before the script-load effect ran (shouldn't happen — the `isReady`
-    // guard above runs first — but the fallback keeps the type narrow).
+    // The widget loader picks its iframe origin from `environment`. Use the
+    // value captured when the script loaded, so the iframe always matches the
+    // script on the page even if `config.env` has changed since. The `isReady`
+    // guard above means the fallback is never used; it keeps the type narrow.
     instanceRef.current = window.OmniFI.connect({
       ...configRef.current,
       environment: loaderEnvRef.current ?? "production",
       // The one thing this hook does NOT pass through, and it has to not.
       //
-      // The loader calls `onSuccess(data.connections)` with the bare array
-      // (`packages/link-loader/src/index.ts`), while this SDK's documented API
-      // — every example in the README and the hosted docs — is
-      // `onSuccess({ connections })`. Without this wrapper a host
-      // destructuring `{ connections }` off an array gets `undefined` and
+      // The loader calls `onSuccess(data.connections)` with the bare array,
+      // while this SDK's documented API — every example in the README and the
+      // hosted docs — is `onSuccess({ connections })`. Without this wrapper a
+      // host destructuring `{ connections }` off an array gets `undefined` and
       // silently never sees its connections.
       //
       // The SDK adapts rather than the loader changing, because vanilla-JS

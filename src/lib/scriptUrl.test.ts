@@ -53,8 +53,7 @@ describe("getScriptUrl", () => {
  *
  * Drives the `getLoaderEnvironment` helper that `useOmniFILink` uses to
  * translate the SDK's `env` field into the `environment` signal the widget
- * loader (`omni-fi-link/packages/link-loader`) reads to pick its iframe
- * origin.
+ * loader reads to pick its iframe origin.
  */
 describe("getLoaderEnvironment", () => {
   test("defaults to 'production' when called with no argument", () => {
